@@ -1,4 +1,4 @@
-import { Home, Users, MapPin, ChevronRight, X } from 'lucide-react';
+import { Home, Users, MapPin, Navigation, ChevronRight, X } from 'lucide-react';
 import {
   Sheet,
   SheetContent,
@@ -7,7 +7,7 @@ import {
   SheetDescription,
 } from '@/components/ui/sheet';
 import { Progress } from '@/components/ui/progress';
-import { cn } from '@/lib/utils';
+import { cn, openGoogleMapsDirections } from '@/lib/utils';
 import type { Shelter } from '@/types';
 
 interface ShelterWidgetProps {
@@ -28,14 +28,14 @@ export function ShelterWidget({ shelters, open, onOpenChange }: ShelterWidgetPro
         side="right"
         className="w-full overflow-y-auto p-0 sm:max-w-md"
       >
-        <div className="sticky top-0 z-10 border-b border-border bg-card/95 px-6 py-4 backdrop-blur-xl">
+        <div className="sticky top-0 z-10 border-b border-border bg-card/95 px-4 sm:px-6 py-3.5 sm:py-4 backdrop-blur-xl">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-info/15 ring-1 ring-info/30">
-              <Home className="h-5 w-5 text-info" />
+            <div className="flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-xl bg-info/15 ring-1 ring-info/30">
+              <Home className="h-4 w-4 sm:h-5 sm:w-5 text-info" />
             </div>
-            <div>
-              <SheetTitle className="text-lg font-bold">Shelter Portal</SheetTitle>
-              <SheetDescription className="text-xs">
+            <div className="min-w-0">
+              <SheetTitle className="text-base sm:text-lg font-bold">Shelter Portal</SheetTitle>
+              <SheetDescription className="text-xs truncate">
                 {openCount} shelters open · {totalCapacity - totalOccupied} beds available
               </SheetDescription>
             </div>
@@ -43,8 +43,8 @@ export function ShelterWidget({ shelters, open, onOpenChange }: ShelterWidgetPro
         </div>
 
         {/* Overall capacity */}
-        <div className="border-b border-border px-6 py-4">
-          <div className="flex items-center justify-between text-sm">
+        <div className="border-b border-border px-4 sm:px-6 py-3.5 sm:py-4">
+          <div className="flex items-center justify-between text-xs sm:text-sm">
             <span className="font-semibold">Regional Capacity</span>
             <span className={cn('font-bold', overallPct > 85 ? 'text-alert' : 'text-success')}>
               {totalOccupied}/{totalCapacity}
@@ -54,32 +54,32 @@ export function ShelterWidget({ shelters, open, onOpenChange }: ShelterWidgetPro
             value={overallPct}
             className={cn('mt-2 h-2.5', overallPct > 85 && '[&_[data-state=complete]]:bg-alert')}
           />
-          <div className="mt-1.5 flex justify-between text-[11px] text-muted-foreground">
+          <div className="mt-1.5 flex justify-between text-[10px] sm:text-[11px] text-muted-foreground">
             <span>{overallPct}% occupied</span>
             <span>{totalCapacity - totalOccupied} beds free</span>
           </div>
         </div>
 
         {/* Shelter list */}
-        <div className="space-y-3 px-6 py-4">
+        <div className="space-y-3 px-4 sm:px-6 py-4">
           {shelters.map((s) => {
             const pct = Math.round((s.occupied / s.capacity) * 100);
             const isFull = s.status === 'full';
             return (
               <div
                 key={s.id}
-                className="rounded-xl border border-border bg-card p-4 transition-colors hover:bg-card/80"
+                className="rounded-xl border border-border bg-card p-3.5 sm:p-4 transition-colors hover:bg-card/80"
               >
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h3 className="text-sm font-bold leading-tight">{s.name}</h3>
-                    <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
-                      <MapPin className="h-3 w-3" /> {s.address}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-bold leading-tight break-words">{s.name}</h3>
+                    <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground break-words">
+                      <MapPin className="h-3 w-3 shrink-0" /> <span className="truncate">{s.address}</span>
                     </p>
                   </div>
                   <span
                     className={cn(
-                      'rounded-full px-2 py-0.5 text-[10px] font-bold uppercase',
+                      'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase',
                       isFull ? 'bg-alert/15 text-alert' : 'bg-success/15 text-success'
                     )}
                   >
@@ -91,7 +91,7 @@ export function ShelterWidget({ shelters, open, onOpenChange }: ShelterWidgetPro
                 <div className="mt-3">
                   <div className="flex items-center justify-between text-xs">
                     <span className="flex items-center gap-1 font-semibold">
-                      <Users className="h-3 w-3" /> {s.occupied}/{s.capacity} beds
+                      <Users className="h-3 w-3 text-muted-foreground" /> {s.occupied}/{s.capacity} beds
                     </span>
                     <span className={cn('font-bold', isFull ? 'text-alert' : pct > 75 ? 'text-warning' : 'text-success')}>
                       {pct}%
@@ -117,8 +117,11 @@ export function ShelterWidget({ shelters, open, onOpenChange }: ShelterWidgetPro
                   ))}
                 </div>
 
-                <button className="mt-3 flex w-full items-center justify-center gap-1 rounded-lg border border-border bg-secondary/40 py-2 text-xs font-bold transition-colors hover:bg-secondary">
-                  View Details <ChevronRight className="h-3.5 w-3.5" />
+                <button
+                  onClick={() => openGoogleMapsDirections(`${s.name}, ${s.address}, Delhi NCR`)}
+                  className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg border border-border bg-secondary/40 py-2 text-xs font-bold transition-colors hover:bg-secondary active:scale-[0.99]"
+                >
+                  <Navigation className="h-3.5 w-3.5 text-info" /> Get Directions
                 </button>
               </div>
             );

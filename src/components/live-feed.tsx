@@ -15,7 +15,7 @@ import {
   Trash2,
   RefreshCw,
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, openGoogleMapsDirections } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
 import { CATEGORY_META, PRIORITY_META } from '@/types';
@@ -185,12 +185,12 @@ function RequestCard({ request, selected, onSelect, index }: RequestCardProps) {
     >
       {/* Header row */}
       <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 min-w-0">
           <div className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-lg', meta.bg)}>
             <Icon className={cn('h-4 w-4', meta.text)} />
           </div>
-          <div>
-            <div className="flex items-center gap-1.5">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-1 sm:gap-1.5">
               <span className={cn('rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide', meta.bg, meta.text)}>
                 {meta.label}
               </span>
@@ -200,14 +200,14 @@ function RequestCard({ request, selected, onSelect, index }: RequestCardProps) {
             </div>
           </div>
         </div>
-        <span className="flex items-center gap-0.5 text-[11px] text-muted-foreground">
+        <span className="flex shrink-0 items-center gap-0.5 text-[10px] sm:text-[11px] text-muted-foreground">
           <Clock className="h-3 w-3" /> {timeAgo(request.createdAt)}
         </span>
       </div>
 
       {/* Title + details */}
-      <h3 className="mt-2 text-sm font-bold leading-snug">{request.title}</h3>
-      <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{request.details}</p>
+      <h3 className="mt-2 text-sm font-bold leading-snug break-words">{request.title}</h3>
+      <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground break-words">{request.details}</p>
 
       {/* Items */}
       {request.items.length > 0 && (
@@ -221,8 +221,8 @@ function RequestCard({ request, selected, onSelect, index }: RequestCardProps) {
       )}
 
       {/* Footer: distance + people + CTA */}
-      <div className="mt-3 flex items-center justify-between gap-2 border-t border-border/60 pt-2.5">
-        <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-2.5">
+        <div className="flex items-center gap-2.5 sm:gap-3 text-[11px] text-muted-foreground">
           <span className="flex items-center gap-0.5">
             <MapPin className="h-3 w-3 text-info" /> {request.distanceMiles}mi
           </span>
@@ -232,11 +232,17 @@ function RequestCard({ request, selected, onSelect, index }: RequestCardProps) {
             </span>
           )}
         </div>
-        <div className="flex gap-1.5">
-          <button className="flex items-center gap-1 rounded-lg bg-success px-2.5 py-1.5 text-[11px] font-bold text-white transition-all hover:bg-success/90 active:scale-95">
+        <div className="flex items-center gap-1.5">
+          <button className="flex items-center gap-1 rounded-lg bg-success px-2 sm:px-2.5 py-1.5 text-[10px] sm:text-[11px] font-bold text-white transition-all hover:bg-success/90 active:scale-95">
             <Users className="h-3 w-3" /> I Can Help
           </button>
-          <button className="flex items-center gap-1 rounded-lg border border-border bg-secondary/40 px-2.5 py-1.5 text-[11px] font-bold transition-all hover:bg-secondary active:scale-95">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              openGoogleMapsDirections(`${request.title}, Delhi NCR`);
+            }}
+            className="flex items-center gap-1 rounded-lg border border-border bg-secondary/40 px-2 sm:px-2.5 py-1.5 text-[10px] sm:text-[11px] font-bold transition-all hover:bg-secondary active:scale-95"
+          >
             <Navigation className="h-3 w-3 text-info" /> Directions
           </button>
         </div>

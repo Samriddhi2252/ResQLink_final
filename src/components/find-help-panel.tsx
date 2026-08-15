@@ -24,7 +24,7 @@ import {
 } from '@/components/ui/sheet';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { cn } from '@/lib/utils';
+import { cn, openGoogleMapsDirections } from '@/lib/utils';
 import type { Resource, ResourceType } from '@/types';
 import { useVoiceInput } from '@/hooks/use-voice-input';
 import { VoiceMicButton } from '@/components/voice-mic-button';
@@ -103,38 +103,38 @@ export function FindHelpPanel({ open, onOpenChange, resources }: FindHelpPanelPr
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-full p-0 sm:max-w-lg">
         {/* Header */}
-        <div className="sticky top-0 z-10 border-b border-border bg-card/95 px-5 py-4 backdrop-blur-xl">
+        <div className="sticky top-0 z-10 border-b border-border bg-card/95 px-4 sm:px-5 py-3.5 sm:py-4 backdrop-blur-xl">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-info/15 ring-1 ring-info/30">
-              <Search className="h-5 w-5 text-info" />
+            <div className="flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-xl bg-info/15 ring-1 ring-info/30">
+              <Search className="h-4 w-4 sm:h-5 sm:w-5 text-info" />
             </div>
-            <div>
-              <SheetTitle className="text-lg font-bold">Find Help Near You</SheetTitle>
-              <SheetDescription className="text-xs">
-                Search hospitals, pharmacies, food, shelters & rescue services in NCR
+            <div className="min-w-0">
+              <SheetTitle className="text-base sm:text-lg font-bold">Find Help Near You</SheetTitle>
+              <SheetDescription className="text-xs truncate">
+                Search hospitals, pharmacies, food, shelters & rescue in NCR
               </SheetDescription>
             </div>
           </div>
 
           {/* Search bar */}
           <div className="relative mt-3">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 sm:h-4 sm:w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by name, area, or need (e.g. insulin, dialysis, langar)..."
-className={cn('border-border bg-secondary/30 pl-9 pr-20', voice.listening && 'border-alert/40 ring-1 ring-alert/20')}
+              placeholder="Search by name, area, or need..."
+              className={cn('h-10 border-border bg-secondary/30 pl-8 sm:pl-9 pr-16 sm:pr-20 text-xs sm:text-sm', voice.listening && 'border-alert/40 ring-1 ring-alert/20')}
             />
             {search && (
               <button
                 onClick={() => setSearch('')}
-                className="absolute right-12 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground"
+                className="absolute right-11 sm:right-12 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:text-foreground"
                 aria-label="Clear search"
               >
-                <X className="h-4 w-4" />
+                <X className="h-3.5 w-3.5" />
               </button>
             )}
-            <div className="absolute right-2 top-1/2 -translate-y-1/2">
+            <div className="absolute right-1.5 sm:right-2 top-1/2 -translate-y-1/2">
               <VoiceMicButton
                 listening={voice.listening}
                 supported={voice.supported}
@@ -152,7 +152,7 @@ className={cn('border-border bg-secondary/30 pl-9 pr-20', voice.listening && 'bo
           )}
 
           {/* Type filter chips */}
-          <div className="mt-3 flex gap-1.5 overflow-x-auto scrollbar-hide">
+          <div className="mt-3 flex gap-1.5 overflow-x-auto scrollbar-hide touch-pan-x pb-0.5">
             {TYPE_FILTERS.map((f) => {
               const Icon = f.icon;
               const active = typeFilter === f.id;
@@ -161,7 +161,7 @@ className={cn('border-border bg-secondary/30 pl-9 pr-20', voice.listening && 'bo
                   key={f.id}
                   onClick={() => setTypeFilter(f.id)}
                   className={cn(
-                    'flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors',
+                    'flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 sm:px-3 py-1.5 text-xs font-semibold transition-colors',
                     active
                       ? 'border-info/40 bg-info/15 text-info'
                       : 'border-border bg-secondary/30 text-muted-foreground hover:text-foreground'
@@ -179,8 +179,8 @@ className={cn('border-border bg-secondary/30 pl-9 pr-20', voice.listening && 'bo
         </div>
 
         {/* Results */}
-        <ScrollArea className="h-[calc(100vh-220px)]">
-          <div className="space-y-2.5 p-4">
+        <ScrollArea className="h-[calc(100dvh-200px)] sm:h-[calc(100dvh-220px)]">
+          <div className="space-y-2.5 p-3.5 sm:p-4">
             <p className="text-xs text-muted-foreground">
               {filtered.length} resource{filtered.length !== 1 ? 's' : ''} found
               {search && ` for "${search}"`}
@@ -210,22 +210,22 @@ function ResourceCard({ resource, index }: { resource: Resource; index: number }
 
   return (
     <div
-      className="rounded-xl border border-border bg-card p-4 transition-all animate-slide-in-right hover:bg-card/80"
+      className="rounded-xl border border-border bg-card p-3.5 sm:p-4 transition-all animate-slide-in-right hover:bg-card/80"
       style={{ animationDelay: `${index * 30}ms` }}
     >
-      <div className="flex items-start gap-3">
-        <div className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-lg', meta.bg)}>
-          <Icon className={cn('h-5 w-5', meta.text)} />
+      <div className="flex items-start gap-2.5 sm:gap-3">
+        <div className={cn('flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-lg', meta.bg)}>
+          <Icon className={cn('h-4 w-4 sm:h-5 sm:w-5', meta.text)} />
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
-            <h3 className="text-sm font-bold leading-tight">{resource.name}</h3>
+            <h3 className="text-sm font-bold leading-tight break-words">{resource.name}</h3>
             <span className={cn('shrink-0 text-[10px] font-bold uppercase', status.color)}>
               {status.label}
             </span>
           </div>
-          <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
-            <MapPin className="h-3 w-3" /> {resource.address}
+          <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground break-words">
+            <MapPin className="h-3 w-3 shrink-0" /> <span className="truncate">{resource.address}</span>
           </p>
 
           {/* Tags */}
@@ -251,8 +251,8 @@ function ResourceCard({ resource, index }: { resource: Resource; index: number }
           </div>
 
           {/* Footer */}
-          <div className="mt-3 flex items-center justify-between gap-2 border-t border-border/60 pt-2.5">
-            <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-2.5">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-[11px] text-muted-foreground">
               <span className="flex items-center gap-0.5">
                 <MapPin className="h-3 w-3 text-info" /> {resource.distanceMiles}mi
               </span>
@@ -260,7 +260,10 @@ function ResourceCard({ resource, index }: { resource: Resource; index: number }
                 <Phone className="h-3 w-3" /> {resource.phone}
               </span>
             </div>
-            <button className="flex items-center gap-1 rounded-lg border border-border bg-secondary/40 px-2.5 py-1.5 text-[11px] font-bold transition-all hover:bg-secondary active:scale-95">
+            <button
+              onClick={() => openGoogleMapsDirections(`${resource.name}, ${resource.address}`)}
+              className="flex items-center gap-1 rounded-lg border border-border bg-secondary/40 px-2 sm:px-2.5 py-1.5 text-[10px] sm:text-[11px] font-bold transition-all hover:bg-secondary active:scale-95"
+            >
               <Navigation className="h-3 w-3 text-info" /> Directions
             </button>
           </div>

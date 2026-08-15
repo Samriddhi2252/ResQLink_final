@@ -123,14 +123,14 @@ export function SosDrawer({ open, onOpenChange, isOnline, onEnqueue }: SosDrawer
         side="right"
         className="w-full overflow-y-auto p-0 sm:max-w-md"
       >
-        <div className="sticky top-0 z-10 border-b border-border bg-card/95 px-6 py-4 backdrop-blur-xl">
+        <div className="sticky top-0 z-10 border-b border-border bg-card/95 px-4 sm:px-6 py-3.5 sm:py-4 backdrop-blur-xl">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-alert/15 ring-1 ring-alert/30">
-              <Siren className="h-5 w-5 text-alert" />
+            <div className="flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-xl bg-alert/15 ring-1 ring-alert/30">
+              <Siren className="h-4 w-4 sm:h-5 sm:w-5 text-alert" />
             </div>
-            <div>
-              <SheetTitle className="text-lg font-bold">Request Aid (SOS)</SheetTitle>
-              <SheetDescription className="text-xs">
+            <div className="min-w-0">
+              <SheetTitle className="text-base sm:text-lg font-bold">Request Aid (SOS)</SheetTitle>
+              <SheetDescription className="text-xs truncate">
                 {isOnline ? 'Submitting live to response network' : 'Offline — will queue and sync automatically'}
               </SheetDescription>
             </div>
@@ -138,26 +138,26 @@ export function SosDrawer({ open, onOpenChange, isOnline, onEnqueue }: SosDrawer
         </div>
 
         {submitted ? (
-          <div className="flex flex-col items-center justify-center px-6 py-20 text-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-success/15 ring-1 ring-success/30">
-              <CheckCircle2 className="h-8 w-8 text-success" />
+          <div className="flex flex-col items-center justify-center px-4 sm:px-6 py-16 sm:py-20 text-center">
+            <div className="flex h-14 w-14 sm:h-16 sm:w-16 items-center justify-center rounded-full bg-success/15 ring-1 ring-success/30">
+              <CheckCircle2 className="h-7 w-7 sm:h-8 sm:w-8 text-success" />
             </div>
-            <h3 className="mt-4 text-lg font-bold">Request {isOnline ? 'Submitted' : 'Queued'}</h3>
-            <p className="mt-1 max-w-[260px] text-sm text-muted-foreground">
+            <h3 className="mt-4 text-base sm:text-lg font-bold">Request {isOnline ? 'Submitted' : 'Queued'}</h3>
+            <p className="mt-1 max-w-[260px] text-xs sm:text-sm text-muted-foreground">
               {isOnline
                 ? 'Your request is now visible to nearby responders and volunteers.'
                 : 'Saved locally. It will be sent automatically once you reconnect.'}
             </p>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="space-y-5 px-6 py-5">
+          <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5 px-4 sm:px-6 py-4 sm:py-5">
             {/* Category */}
-            <div className="space-y-2">
+            <div className="space-y-1.5 sm:space-y-2">
               <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Need Category
               </Label>
               <Select value={category} onValueChange={setCategory}>
-                <SelectTrigger className="h-11 border-border bg-secondary/30">
+                <SelectTrigger className="h-10 sm:h-11 border-border bg-secondary/30 text-xs sm:text-sm">
                   <SelectValue placeholder="Select what you need" />
                 </SelectTrigger>
                 <SelectContent>
@@ -165,7 +165,7 @@ export function SosDrawer({ open, onOpenChange, isOnline, onEnqueue }: SosDrawer
                     const Icon = c.icon;
                     return (
                       <SelectItem key={c.value} value={c.value}>
-                        <span className="flex items-center gap-2">
+                        <span className="flex items-center gap-2 text-xs sm:text-sm">
                           <Icon className="h-4 w-4 text-muted-foreground" />
                           {c.label}
                         </span>
@@ -177,7 +177,7 @@ export function SosDrawer({ open, onOpenChange, isOnline, onEnqueue }: SosDrawer
             </div>
 
             {/* Details */}
-            <div className="space-y-2">
+            <div className="space-y-1.5 sm:space-y-2">
               <div className="flex items-center justify-between">
                 <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Situation Details
@@ -194,7 +194,7 @@ export function SosDrawer({ open, onOpenChange, isOnline, onEnqueue }: SosDrawer
                 value={details}
                 onChange={(e) => setDetails(e.target.value)}
                 placeholder="Describe the situation — who needs help, what's happening, urgency level..."
-                className={cn('min-h-[90px] resize-none border-border bg-secondary/30', voice.listening && voiceActive && 'border-alert/40 ring-1 ring-alert/20')}
+                className={cn('min-h-[85px] sm:min-h-[90px] resize-none border-border bg-secondary/30 text-xs sm:text-sm', voice.listening && voiceActive && 'border-alert/40 ring-1 ring-alert/20')}
               />
               {voice.listening && voiceActive && (
                 <p className="-mt-1 flex items-center gap-1 text-[11px] font-medium text-alert">
@@ -204,7 +204,7 @@ export function SosDrawer({ open, onOpenChange, isOnline, onEnqueue }: SosDrawer
             </div>
 
             {/* Items needed */}
-            <div className="space-y-2">
+            <div className="space-y-1.5 sm:space-y-2">
               <div className="flex items-center justify-between">
                 <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Specific Items Needed
@@ -221,12 +221,12 @@ export function SosDrawer({ open, onOpenChange, isOnline, onEnqueue }: SosDrawer
                 value={items}
                 onChange={(e) => setItems(e.target.value)}
                 placeholder="e.g. Insulin, bottled water, baby formula..."
-                className="border-border bg-secondary/30"
+                className="h-10 sm:h-11 border-border bg-secondary/30 text-xs sm:text-sm"
               />
             </div>
 
             {/* Contact */}
-            <div className="space-y-2">
+            <div className="space-y-1.5 sm:space-y-2">
               <div className="flex items-center justify-between">
                 <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Contact Information
@@ -243,19 +243,19 @@ export function SosDrawer({ open, onOpenChange, isOnline, onEnqueue }: SosDrawer
                 value={contact}
                 onChange={(e) => setContact(e.target.value)}
                 placeholder="Name and phone number"
-                className="border-border bg-secondary/30"
+                className="h-10 sm:h-11 border-border bg-secondary/30 text-xs sm:text-sm"
               />
             </div>
 
             {/* GPS */}
-            <div className="space-y-2">
+            <div className="space-y-1.5 sm:space-y-2">
               <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 GPS Coordinates
               </Label>
               <div className="flex gap-2">
-                <div className="flex flex-1 items-center gap-2 rounded-md border border-border bg-secondary/30 px-3">
-                  <MapPin className="h-4 w-4 text-muted-foreground" />
-                  <span className={cn('text-sm', coords ? 'text-foreground' : 'text-muted-foreground')}>
+                <div className="flex flex-1 min-w-0 items-center gap-2 rounded-md border border-border bg-secondary/30 px-3 py-2">
+                  <MapPin className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <span className={cn('truncate text-xs sm:text-sm font-mono', coords ? 'text-foreground' : 'text-muted-foreground')}>
                     {coords || 'Not detected'}
                   </span>
                 </div>
@@ -264,14 +264,14 @@ export function SosDrawer({ open, onOpenChange, isOnline, onEnqueue }: SosDrawer
                   variant="outline"
                   onClick={handleLocate}
                   disabled={locating}
-                  className="border-border bg-secondary/40"
+                  className="h-10 border-border bg-secondary/40 shrink-0 px-2.5 sm:px-3"
                 >
                   {locating ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     <LocateFixed className="h-4 w-4 text-info" />
                   )}
-                  <span className="ml-1.5 text-xs font-semibold">Detect</span>
+                  <span className="ml-1 sm:ml-1.5 text-xs font-semibold">Detect</span>
                 </Button>
               </div>
             </div>
