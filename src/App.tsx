@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { TopNav } from '@/components/top-nav';
 import { StatusBanner } from '@/components/status-banner';
 import { MapView } from '@/components/map-view';
+import type { MapRegion } from '@/components/map-view';
 import { LiveFeed } from '@/components/live-feed';
 import { SosDrawer } from '@/components/sos-drawer';
 import { ShelterWidget } from '@/components/shelter-widget';
@@ -24,6 +25,7 @@ function App() {
   const { offers, loading: offersLoading, error: offersError, createOffer } = useVolunteerOffers();
 
   const [filter, setFilter] = useState<FilterCategory>('all');
+  const [region, setRegion] = useState<MapRegion>('ncr');
   const [sosOpen, setSosOpen] = useState(false);
   const [shelterOpen, setShelterOpen] = useState(false);
   const [findHelpOpen, setFindHelpOpen] = useState(false);
@@ -54,6 +56,11 @@ function App() {
     if (id) setMobileTab('map');
   };
 
+  const handleRegionChange = (r: MapRegion) => {
+    setRegion(r);
+    setSelectedId(null);
+  };
+
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <TopNav
@@ -69,6 +76,8 @@ function App() {
         activeFilter={filter}
         onFilterChange={setFilter}
         requestCount={requests.length}
+        region={region}
+        onRegionChange={handleRegionChange}
       />
 
       {/* Main content */}
@@ -84,6 +93,7 @@ function App() {
               isOnline={isOnline}
               selectedId={selectedId}
               onSelect={handleSelect}
+              region={region}
             />
           </div>
 
@@ -113,6 +123,7 @@ function App() {
                 isOnline={isOnline}
                 selectedId={selectedId}
                 onSelect={handleSelect}
+                region={region}
               />
             </div>
           )}

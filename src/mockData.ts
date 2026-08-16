@@ -207,6 +207,21 @@ export const MOCK_VOLUNTEERS: Volunteer[] = [
 
 export const EMERGENCY_ZONE = 'Yamuna Flood Relief — East Delhi NCR';
 
+export const REGION_ZONES = {
+  ncr: {
+    zone:     'Yamuna Flood Relief — East Delhi NCR',
+    location: 'Delhi · Noida · Gurugram · Faridabad · Ghaziabad',
+    hazard:   'Active Flood Zone — Yamuna River Basin',
+    stats:    { requestCount: 8, shelterCount: 4, responderCount: 13, area: 'NCR Region' },
+  },
+  badrinath: {
+    zone:     'Disaster Relief — Joshimath, Chamoli, Uttarakhand',
+    location: 'Joshimath · Badrinath · Chamoli District · Uttarakhand',
+    hazard:   'Active Landslide & Flood Zone — Himalayan Region',
+    stats:    { requestCount: 8, shelterCount: 5, responderCount: 7, area: 'Chamoli District' },
+  },
+} as const;
+
 export const MOCK_RESOURCES: Resource[] = [
   {
     id: 'res-001',

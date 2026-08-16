@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import type { VolunteerOffer, VolunteerOfferCategory } from '@/types';
 
 interface OfferRow {
@@ -48,6 +48,10 @@ export function useVolunteerOffers() {
   const [error, setError] = useState<string | null>(null);
 
   const loadOffers = useCallback(async () => {
+    if (!isSupabaseConfigured) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     const { data, error: queryError } = await supabase
       .from('volunteer_offers')

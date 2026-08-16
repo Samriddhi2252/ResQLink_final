@@ -118,3 +118,156 @@
 .animate-sweep { animation: sweep 4s linear infinite; }
 .animate-float-up { animation: float-up 0.4s ease-out both; }
 .animate-slide-in-right { animation: slide-in-right 0.35s ease-out both; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   OFFLINE DISASTER MAP — Leaflet overrides (dark navy theme)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Base container */
+.leaflet-container {
+  background: #0c1827 !important;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif !important;
+  cursor: grab;
+}
+.leaflet-container:active { cursor: grabbing; }
+
+/* Suppress raster tile pane (we use GeoJSON only) */
+.leaflet-tile-pane { display: none !important; }
+
+/* ── Popup ─────────────────────────────────────────────────────────────── */
+.map-popup .leaflet-popup-content-wrapper {
+  background: #0d1f33;
+  color: #e2e8f0;
+  border: 1px solid #1e3a52;
+  border-radius: 14px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.7), 0 2px 8px rgba(0,0,0,0.4);
+  padding: 0;
+  overflow: hidden;
+}
+.map-popup .leaflet-popup-content {
+  margin: 14px 16px;
+}
+.map-popup .leaflet-popup-tip-container { margin-top: -1px; }
+.map-popup .leaflet-popup-tip {
+  background: #0d1f33;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.4);
+}
+.map-popup .leaflet-popup-close-button {
+  color: #4a6a82 !important;
+  font-size: 18px;
+  top: 8px !important;
+  right: 8px !important;
+  width: 24px !important;
+  height: 24px !important;
+  line-height: 24px !important;
+  border-radius: 6px;
+  background: #162840 !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s, background 0.15s;
+}
+.map-popup .leaflet-popup-close-button:hover {
+  color: #e2e8f0 !important;
+  background: #1e3a52 !important;
+}
+
+/* ── Tooltip ───────────────────────────────────────────────────────────── */
+.map-tt {
+  background: #0d1f33 !important;
+  color: #c8d8ea !important;
+  border: 1px solid #1e3a52 !important;
+  border-radius: 8px !important;
+  font-size: 11.5px !important;
+  font-weight: 500 !important;
+  padding: 6px 10px !important;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.55) !important;
+  backdrop-filter: blur(12px) !important;
+  max-width: 230px;
+  line-height: 1.5;
+  pointer-events: none;
+}
+.map-tt-wide { max-width: 300px !important; }
+.map-tt::before { border-top-color: #1e3a52 !important; }
+
+/* Tooltip inner helpers */
+.map-tt .tt-row  { display:flex; align-items:center; gap:6px; font-weight:600; color:#e2e8f0; }
+.map-tt .tt-dot  { flex-shrink:0; width:8px; height:8px; border-radius:50%; display:inline-block; }
+.map-tt .tt-hwy  { flex-shrink:0; padding:1px 5px; border-radius:4px; font-size:9px;
+                   font-weight:800; text-transform:uppercase; letter-spacing:.05em;
+                   background:#1e3a52; color:#93c5fd; }
+.map-tt .tt-sub  { margin-top:3px; font-size:10px; color:#5d8aaa; line-height:1.4; }
+
+/* ── Attribution ───────────────────────────────────────────────────────── */
+.leaflet-control-attribution {
+  background: rgba(13,31,51,0.75) !important;
+  color: #2a4a68 !important;
+  font-size: 9px !important;
+  border-radius: 6px 0 0 0 !important;
+  padding: 2px 6px !important;
+  backdrop-filter: blur(4px);
+}
+.leaflet-control-attribution a { color: #3b82f6 !important; }
+
+/* ── Control button base class (applied via className="map-ctrl-btn") ──── */
+.map-ctrl-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid #1e3a52;
+  background: rgba(13,31,51,0.92);
+  color: #c8d8ea;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+  backdrop-filter: blur(8px);
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.map-ctrl-btn:hover  { background: #162840; border-color: #2a4a68; }
+.map-ctrl-btn:active { transform: scale(0.93); }
+
+/* ── Road name badge labels ────────────────────────────────────────────── */
+.road-label {
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  cursor: default !important;
+}
+
+/* ── POI marker ────────────────────────────────────────────────────────── */
+.poi-marker {
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+}
+.poi-marker:hover > div > div:first-child {
+  transform: scale(1.15);
+  transition: transform 0.15s ease;
+}
+
+/* ── Building footprint tooltip override ───────────────────────────────── */
+.leaflet-interactive:focus { outline: none; }
+
+/* ── Place labels ──────────────────────────────────────────────────────── */
+.place-label {
+  /* Leaflet resets the background; keep it transparent at container level */
+  background: transparent !important;
+  border: none !important;
+  /* prevent any Leaflet outline */
+  outline: none !important;
+  cursor: default !important;
+}
+/* Smooth fade-in when labels become visible */
+.place-label > div {
+  transition: opacity 0.25s ease;
+}
+
+/* ── Leaflet pane z-index guard ────────────────────────────────────────── */
+.leaflet-map-pane   { z-index: 100; }
+.leaflet-overlay-pane { z-index: 200; }
+.leaflet-marker-pane  { z-index: 400; }
+.leaflet-popup-pane   { z-index: 500; }
+.leaflet-tooltip-pane { z-index: 600; }
