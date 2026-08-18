@@ -4,8 +4,9 @@ import {
   Navigation, Clock, MapPin, PersonStanding, CheckCircle2,
   CloudOff, Trash2, RefreshCw, AlertTriangle, ChevronRight,
   Brain, X, ShieldAlert, Users2, Flame, Mountain, Building2,
-  Phone, ExternalLink,
+  Phone, ExternalLink, Copy, Check, ArrowLeft,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { cn, buildGoogleMapsUrl } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
@@ -25,6 +26,7 @@ import type { AidRequest, RequestCategory, FilterCategory } from '@/types';
 import type { QueuedRequest } from '@/hooks/use-network';
 import { timeAgo } from '@/hooks/use-network';
 import type { NavDestination } from '@/hooks/use-navigation';
+import { useModalBack } from '@/hooks/use-modal-back';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Priority configuration (for AI triage priorities)
@@ -63,6 +65,19 @@ const ICON_MAP: Record<RequestCategory, typeof HeartPulse> = {
   volunteers: Users, rescue: LifeBuoy,
 };
 
+export function computeRequestCoords(request: AidRequest, region: string = 'ncr'): [number, number] {
+  const center: [number, number] = region === 'badrinath' ? [30.5560, 79.5640] : [28.6139, 77.2090];
+  if (request.coords && request.coords.y > 15 && request.coords.x > 60) {
+    return [request.coords.y, request.coords.x];
+  }
+  const x = request.coords?.x ?? 50;
+  const y = request.coords?.y ?? 50;
+  return [
+    center[0] + (y - 50) * 0.0012,
+    center[1] + (x - 50) * 0.0012,
+  ];
+}
+
 interface LiveFeedProps {
   requests: AidRequest[];
   filter: FilterCategory;
@@ -75,6 +90,11 @@ interface LiveFeedProps {
   onSelect: (id: string) => void;
   locationLabel?: string;
   onNavigate?: (dest: NavDestination) => void;
+  region?: string;
+  onResolveRequest?: (id: string) => void;
+  onHelpRequest?: (id: string) => void;
+  onCancelHelp?: (id: string) => void;
+  onRestoreRequests?: () => void;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -89,6 +109,8 @@ function TriageDetailModal({
   onClose: () => void;
   onNavigate?: (dest: NavDestination) => void;
 }) {
+  useModalBack(true, onClose);
+
   const t = item.triage;
   const prioMeta = t ? TRIAGE_PRIORITY_META[t.priority] : null;
 
@@ -137,8 +159,17 @@ function TriageDetailModal({
         rounded-2xl border border-border bg-card shadow-2xl animate-float-up">
 
         {/* Header */}
-        <div className="sticky top-0 z-10 flex items-center gap-2.5 border-b border-border
-          bg-card/95 px-4 py-3 backdrop-blur-md">
+        <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-border
+          bg-card/95 px-3.5 py-2.5 sm:px-4 sm:py-3 backdrop-blur-md">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex items-center gap-1 rounded-lg border border-border bg-secondary/50 px-2 py-1 text-xs font-bold text-foreground hover:bg-secondary active:scale-95 transition-all mr-0.5"
+            aria-label="Go back"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            <span>Back</span>
+          </button>
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-alert/15">
             <Brain className="h-4 w-4 text-alert" />
           </div>
@@ -460,10 +491,12 @@ function QueueItem({
 // ─────────────────────────────────────────────────────────────────────────────
 export function LiveFeed({
   requests, filter, isOnline, queue, queueCount, onClearQueue, onRemoveFromQueue,
-  selectedId, onSelect, locationLabel = 'Delhi NCR', onNavigate,
+  selectedId, onSelect, locationLabel = 'Delhi NCR', onNavigate, region = 'ncr',
+  onResolveRequest, onHelpRequest, onCancelHelp, onRestoreRequests,
 }: LiveFeedProps) {
   const [search, setSearch]           = useState('');
   const [selectedQueue, setSelectedQueue] = useState<QueuedRequest | null>(null);
+  const [helpingRequest, setHelpingRequest] = useState<AidRequest | null>(null);
 
   const filtered = requests.filter((r) => {
     if (filter !== 'all' && r.category !== filter) return false;
@@ -471,12 +504,18 @@ export function LiveFeed({
       const q = search.toLowerCase();
       return r.title.toLowerCase().includes(q) ||
              r.details.toLowerCase().includes(q) ||
+             r.contactName.toLowerCase().includes(q) ||
+             r.contactPhone.toLowerCase().includes(q) ||
              r.items.some((i) => i.toLowerCase().includes(q));
     }
     return true;
   });
 
   const sorted = [...filtered].sort((a, b) => {
+    // Put user-created SOS requests at the very top!
+    if (a.isUserCreated && !b.isUserCreated) return -1;
+    if (!a.isUserCreated && b.isUserCreated) return 1;
+
     const order = { critical: 0, urgent: 1, moderate: 2 };
     if (order[a.priority] !== order[b.priority]) return order[a.priority] - order[b.priority];
     return a.distanceMiles - b.distanceMiles;
@@ -505,7 +544,7 @@ export function LiveFeed({
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search requests, items, or keywords..."
+              placeholder="Search requests, names, phones, items..."
               className="border-border bg-secondary/30 pl-9"
             />
           </div>
@@ -567,10 +606,19 @@ export function LiveFeed({
         <ScrollArea className="flex-1">
           <div className="space-y-2.5 p-3">
             {sorted.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16 text-center">
+              <div className="flex flex-col items-center justify-center py-16 text-center px-4">
                 <CheckCircle2 className="h-10 w-10 text-success/40" />
-                <p className="mt-3 text-sm font-medium text-muted-foreground">No matching requests</p>
-                <p className="text-xs text-muted-foreground/70">Try a different filter or search term</p>
+                <p className="mt-3 text-sm font-medium text-muted-foreground">No active requests in this category</p>
+                <p className="text-xs text-muted-foreground/70 mt-0.5">Try a different category or search term</p>
+                {onRestoreRequests && (
+                  <button
+                    type="button"
+                    onClick={onRestoreRequests}
+                    className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-border bg-secondary/50 px-3 py-1.5 text-xs font-bold text-foreground hover:bg-secondary active:scale-95 transition-all shadow-sm"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" /> Restore Cleared Requests
+                  </button>
+                )}
               </div>
             ) : (
               sorted.map((r, i) => (
@@ -579,9 +627,11 @@ export function LiveFeed({
                   request={r}
                   selected={selectedId === r.id}
                   onSelect={() => onSelect(r.id)}
+                  onHelp={(req) => setHelpingRequest(req)}
                   index={i}
                   locationLabel={locationLabel}
                   onNavigate={onNavigate}
+                  region={region}
                 />
               ))
             )}
@@ -597,26 +647,369 @@ export function LiveFeed({
           onNavigate={onNavigate}
         />
       )}
+
+      {/* Responder / I Can Help Modal */}
+      {helpingRequest && (
+        <HelpOfferModal
+          request={helpingRequest}
+          onClose={() => setHelpingRequest(null)}
+          onNavigate={onNavigate}
+          region={region}
+          locationLabel={locationLabel}
+          onHelpRequest={onHelpRequest}
+          onResolve={onResolveRequest}
+          onCancelHelp={onCancelHelp}
+        />
+      )}
     </>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// RequestCard (existing mock AidRequest cards — unchanged)
+// HelpOfferModal ("I Can Help" Responder Modal)
+// ─────────────────────────────────────────────────────────────────────────────
+function HelpOfferModal({
+  request,
+  onClose,
+  onNavigate,
+  region = 'ncr',
+  locationLabel = 'Delhi NCR',
+  onHelpRequest,
+  onResolve,
+  onCancelHelp,
+}: {
+  request: AidRequest;
+  onClose: () => void;
+  onNavigate?: (dest: NavDestination) => void;
+  region?: string;
+  locationLabel?: string;
+  onHelpRequest?: (id: string) => void;
+  onResolve?: (id: string) => void;
+  onCancelHelp?: (id: string) => void;
+}) {
+  useModalBack(true, onClose);
+
+  const [copied, setCopied] = useState(false);
+  const [selectedItems, setSelectedItems] = useState<Record<string, boolean>>(() => {
+    const init: Record<string, boolean> = {};
+    request.items.forEach((item) => {
+      init[item] = true;
+    });
+    return init;
+  });
+  const [committed, setCommitted] = useState(request.status === 'in-progress');
+
+  const meta = CATEGORY_META[request.category];
+  const Icon = ICON_MAP[request.category] || HeartPulse;
+  const prio = PRIORITY_META[request.priority];
+  const coords = computeRequestCoords(request, region);
+  const googleMapsUrl = buildGoogleMapsUrl({ coords, query: locationLabel });
+
+  const handleCopyPhone = () => {
+    if (!request.contactPhone) return;
+    navigator.clipboard.writeText(request.contactPhone.replace(/\s+/g, '')).then(() => {
+      setCopied(true);
+      toast.success('Phone number copied to clipboard', {
+        description: request.contactPhone,
+      });
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  const handleStartNavigation = () => {
+    if (onNavigate) {
+      onNavigate({
+        id: request.id,
+        name: request.title,
+        address: `${request.contactName} · ${locationLabel}`,
+        coords,
+        phone: request.contactPhone,
+        type: request.category,
+      });
+    }
+    onClose();
+  };
+
+  const handleConfirmHelpAndResolve = () => {
+    setCommitted(true);
+    if (onResolve) {
+      onResolve(request.id);
+    }
+    toast.success('🤝 Help Confirmed & Request Resolved!', {
+      description: `Emergency request for ${request.contactName} (${request.contactPhone}) marked as resolved and removed from queue. Starting route...`,
+    });
+    setTimeout(() => {
+      handleStartNavigation();
+    }, 600);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-2 sm:p-4">
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+
+      {/* Modal */}
+      <div className="relative z-10 w-full max-w-lg max-h-[92dvh] overflow-y-auto rounded-2xl border border-border bg-card shadow-2xl animate-float-up">
+        {/* Header */}
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-card/95 px-3.5 py-2.5 sm:px-4 sm:py-3 backdrop-blur-md">
+          <div className="flex items-center gap-2 min-w-0">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex items-center gap-1 rounded-lg border border-border bg-secondary/50 px-2 py-1 text-xs font-bold text-foreground hover:bg-secondary active:scale-95 transition-all mr-0.5"
+              aria-label="Go back"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              <span>Back</span>
+            </button>
+            <div className={cn('flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-xl', meta.bg)}>
+              <Icon className={cn('h-4 w-4 sm:h-4.5 sm:w-4.5', meta.text)} />
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className={cn('rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider', meta.bg, meta.text)}>
+                  {meta.label}
+                </span>
+                <span className={cn('rounded px-1.5 py-0.5 text-[9px] font-bold uppercase', prio.bg, prio.text)}>
+                  {prio.label}
+                </span>
+                {request.isUserCreated && (
+                  <span className="rounded bg-alert/20 border border-alert/30 px-1.5 py-0.5 text-[9px] font-extrabold text-alert uppercase">
+                    ⚡ Live SOS
+                  </span>
+                )}
+              </div>
+              <h2 className="text-sm font-bold truncate mt-0.5">{request.title}</h2>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="p-4 sm:p-5 space-y-4">
+          {/* Situation Details */}
+          <div className="rounded-xl border border-border bg-secondary/20 p-3.5">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
+              Emergency Situation Details
+            </p>
+            <p className="text-xs sm:text-sm leading-relaxed text-foreground break-words">{request.details}</p>
+            <div className="mt-2.5 flex flex-wrap items-center gap-3 text-xs text-muted-foreground border-t border-border/50 pt-2">
+              <span className="flex items-center gap-1">
+                <Clock className="h-3.5 w-3.5 text-info" /> {timeAgo(request.createdAt)}
+              </span>
+              <span className="flex items-center gap-1">
+                <MapPin className="h-3.5 w-3.5 text-info" /> {request.distanceMiles} miles away
+              </span>
+              {request.peopleCount > 0 && (
+                <span className="flex items-center gap-1">
+                  <Users className="h-3.5 w-3.5 text-info" /> {request.peopleCount} people affected
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Requester Contact Info Card */}
+          <div className="rounded-xl border-2 border-success/40 bg-success/[0.06] p-4 space-y-3">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-success/20 text-success">
+                  <Phone className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-extrabold uppercase tracking-wider text-success">Requester Contact</p>
+                  <p className="text-sm font-bold text-foreground">{request.contactName || 'Emergency Requester'}</p>
+                </div>
+              </div>
+              <span className="text-xs font-mono font-bold text-success bg-success/15 px-2.5 py-1 rounded-md border border-success/30">
+                {request.contactPhone || 'No number provided'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <a
+                href={request.contactPhone ? `tel:${request.contactPhone.replace(/[\s\-().]/g, '')}` : '#'}
+                className="flex items-center justify-center gap-2 rounded-xl bg-success px-3 py-2.5 text-xs font-bold text-white shadow-md shadow-success/20 hover:bg-success/90 active:scale-95 transition-all text-center"
+              >
+                <Phone className="h-3.5 w-3.5" /> Call Now
+              </a>
+              <button
+                type="button"
+                onClick={handleCopyPhone}
+                className="flex items-center justify-center gap-1.5 rounded-xl border border-border bg-secondary/60 px-3 py-2.5 text-xs font-bold text-foreground hover:bg-secondary active:scale-95 transition-all"
+              >
+                {copied ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />}
+                {copied ? 'Copied!' : 'Copy Number'}
+              </button>
+            </div>
+          </div>
+
+          {/* Location & Map Navigation Card */}
+          <div className="rounded-xl border border-info/30 bg-info/[0.05] p-4 space-y-3">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-info/20 text-info">
+                  <Navigation className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-extrabold uppercase tracking-wider text-info">Victim Location & Route</p>
+                  <p className="text-xs font-bold text-foreground">{locationLabel}</p>
+                </div>
+              </div>
+              <span className="text-[10px] font-mono text-muted-foreground bg-secondary/40 px-2 py-0.5 rounded border border-border">
+                {coords[0].toFixed(4)}, {coords[1].toFixed(4)}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={handleStartNavigation}
+                className="flex items-center justify-center gap-1.5 rounded-xl bg-info px-3 py-2.5 text-xs font-bold text-white shadow-md shadow-info/20 hover:bg-info/90 active:scale-95 transition-all"
+              >
+                <MapPin className="h-3.5 w-3.5" /> View on Map & Navigate
+              </button>
+              {googleMapsUrl && (
+                <a
+                  href={googleMapsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-1.5 rounded-xl border border-border bg-secondary/60 px-3 py-2.5 text-xs font-bold text-foreground hover:bg-secondary active:scale-95 transition-all text-center"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" /> Google Maps ↗
+                </a>
+              )}
+            </div>
+          </div>
+
+          {/* Items Needed Checklist */}
+          {request.items.length > 0 && (
+            <div className="rounded-xl border border-border bg-card p-3.5 space-y-2">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                Items / Supplies Needed (Select what you can provide)
+              </p>
+              <div className="space-y-1.5">
+                {request.items.map((item, idx) => (
+                  <label
+                    key={idx}
+                    className={cn(
+                      'flex items-center gap-2 rounded-lg border p-2 text-xs font-medium cursor-pointer transition-colors',
+                      selectedItems[item]
+                        ? 'border-success/40 bg-success/10 text-foreground'
+                        : 'border-border bg-secondary/20 text-muted-foreground hover:bg-secondary/40'
+                    )}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={!!selectedItems[item]}
+                      onChange={(e) =>
+                        setSelectedItems((prev) => ({ ...prev, [item]: e.target.checked }))
+                      }
+                      className="rounded border-border text-success focus:ring-success h-3.5 w-3.5"
+                    />
+                    <span className="flex-1">{item}</span>
+                    {selectedItems[item] && (
+                      <span className="text-[10px] font-bold text-success">✓ Providing</span>
+                    )}
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Confirmation Action Button */}
+          <div className="space-y-2 pt-2">
+            <button
+              type="button"
+              onClick={handleConfirmHelpAndResolve}
+              disabled={committed}
+              className="w-full flex items-center justify-center gap-2 rounded-xl bg-success hover:bg-success/90 px-4 py-3.5 text-sm font-bold text-white shadow-lg shadow-success/25 transition-all active:scale-[0.99]"
+            >
+              <Users className="h-4 w-4" />
+              <span>{committed ? 'Help Confirmed & Resolved!' : '🤝 Confirm Help & Resolve Request'}</span>
+            </button>
+
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={handleStartNavigation}
+                className="flex items-center justify-center gap-1.5 rounded-xl border border-info/30 bg-info/10 hover:bg-info/20 text-info px-3 py-2.5 text-xs font-bold active:scale-95 transition-all text-center"
+              >
+                <MapPin className="h-3.5 w-3.5" /> Navigate on Map
+              </button>
+
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex items-center justify-center gap-1.5 rounded-xl border border-border bg-secondary/60 hover:bg-secondary px-3 py-2.5 text-xs font-bold text-muted-foreground active:scale-95 transition-all text-center"
+              >
+                Close
+              </button>
+            </div>
+
+            <p className="mt-2 text-center text-[10px] text-muted-foreground">
+              Always ensure personal safety first. Dial <strong>112</strong> for life-threatening emergencies.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RequestCard
 // ─────────────────────────────────────────────────────────────────────────────
 interface RequestCardProps {
   request: AidRequest;
   selected: boolean;
   onSelect: () => void;
+  onHelp: (req: AidRequest) => void;
   index: number;
   locationLabel?: string;
   onNavigate?: (dest: NavDestination) => void;
+  region?: string;
 }
 
-function RequestCard({ request, selected, onSelect, index, locationLabel = 'Delhi NCR', onNavigate }: RequestCardProps) {
+function RequestCard({
+  request,
+  selected,
+  onSelect,
+  onHelp,
+  index,
+  locationLabel = 'Delhi NCR',
+  onNavigate,
+  region = 'ncr',
+}: RequestCardProps) {
   const meta = CATEGORY_META[request.category];
-  const Icon = ICON_MAP[request.category];
+  const Icon = ICON_MAP[request.category] || HeartPulse;
   const prio = PRIORITY_META[request.priority];
+  const coords = computeRequestCoords(request, region);
+
+  const handleDirections = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onNavigate) {
+      onNavigate({
+        id: request.id,
+        name: request.title,
+        address: `${request.contactName} · ${locationLabel}`,
+        coords,
+        phone: request.contactPhone,
+        type: request.category,
+      });
+    }
+    onSelect();
+  };
+
+  const handleHelpClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onHelp(request);
+  };
+
+  const isHelping = request.status === 'in-progress';
 
   return (
     <div
@@ -625,7 +1018,9 @@ function RequestCard({ request, selected, onSelect, index, locationLabel = 'Delh
         'group cursor-pointer rounded-xl border bg-card p-3 transition-all animate-slide-in-right',
         selected
           ? 'border-alert/50 ring-1 ring-alert/30'
-          : 'border-border hover:border-border/80 hover:bg-card/80'
+          : 'border-border hover:border-border/80 hover:bg-card/80',
+        request.isUserCreated && 'ring-1 ring-alert/40 border-alert/40 bg-alert/[0.02]',
+        isHelping && 'border-success/40 bg-success/[0.03] ring-1 ring-success/30'
       )}
       style={{ animationDelay: `${index * 40}ms` }}
     >
@@ -643,6 +1038,16 @@ function RequestCard({ request, selected, onSelect, index, locationLabel = 'Delh
               <span className={cn('rounded px-1.5 py-0.5 text-[9px] font-bold uppercase', prio.bg, prio.text)}>
                 {prio.label}
               </span>
+              {request.isUserCreated && (
+                <span className="rounded bg-alert/20 border border-alert/30 px-1.5 py-0.5 text-[9px] font-extrabold text-alert uppercase">
+                  ⚡ Live SOS
+                </span>
+              )}
+              {isHelping && (
+                <span className="rounded bg-success/20 border border-success/30 px-1.5 py-0.5 text-[9px] font-extrabold text-success uppercase flex items-center gap-1">
+                  <Users className="h-2.5 w-2.5" /> Helping Active
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -653,6 +1058,23 @@ function RequestCard({ request, selected, onSelect, index, locationLabel = 'Delh
 
       <h3 className="mt-2 text-sm font-bold leading-snug break-words">{request.title}</h3>
       <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground break-words">{request.details}</p>
+
+      {/* Contact preview badge */}
+      {request.contactPhone && (
+        <div className="mt-2 flex items-center justify-between gap-2 rounded-lg bg-secondary/30 border border-border/70 px-2.5 py-1.5 text-xs">
+          <div className="flex items-center gap-1.5 min-w-0 truncate">
+            <span className="font-semibold text-foreground truncate">{request.contactName}:</span>
+            <span className="font-mono text-muted-foreground truncate">{request.contactPhone}</span>
+          </div>
+          <a
+            href={`tel:${request.contactPhone.replace(/[\s\-().]/g, '')}`}
+            onClick={(e) => e.stopPropagation()}
+            className="flex items-center gap-1 rounded bg-success/15 px-2 py-0.5 text-[10px] font-bold text-success hover:bg-success/25 transition-colors shrink-0"
+          >
+            <Phone className="h-2.5 w-2.5" /> Call
+          </a>
+        </div>
+      )}
 
       {request.items.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1">
@@ -676,23 +1098,21 @@ function RequestCard({ request, selected, onSelect, index, locationLabel = 'Delh
           )}
         </div>
         <div className="flex items-center gap-1.5">
-          <button className="flex items-center gap-1 rounded-lg bg-success px-2 sm:px-2.5 py-1.5 text-[10px] sm:text-[11px] font-bold text-white transition-all hover:bg-success/90 active:scale-95">
-            <Users className="h-3 w-3" /> I Can Help
+          <button
+            type="button"
+            onClick={handleHelpClick}
+            className={cn(
+              'flex items-center gap-1 rounded-lg px-2.5 sm:px-3 py-1.5 text-[10px] sm:text-[11px] font-bold text-white shadow-sm transition-all hover:opacity-95 active:scale-95',
+              isHelping
+                ? 'bg-emerald-600 shadow-emerald-600/20 ring-1 ring-emerald-400/40'
+                : 'bg-success shadow-success/20 hover:bg-success/90'
+            )}
+          >
+            <Users className="h-3 w-3" /> {isHelping ? '🤝 Helping Active' : 'I Can Help'}
           </button>
           <button
-            onClick={(e) => {
-              e.stopPropagation();
-              if (onNavigate) {
-                onNavigate({
-                  id: request.id,
-                  name: request.title,
-                  address: locationLabel,
-                  coords: [0, 0],
-                  type: request.category,
-                });
-              }
-              onSelect();
-            }}
+            type="button"
+            onClick={handleDirections}
             className="flex items-center gap-1 rounded-lg border border-border bg-secondary/40 px-2 sm:px-2.5 py-1.5 text-[10px] sm:text-[11px] font-bold transition-all hover:bg-secondary active:scale-95"
           >
             <Navigation className="h-3 w-3 text-info" /> Directions

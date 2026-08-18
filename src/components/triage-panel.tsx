@@ -3,7 +3,7 @@ import {
   AlertTriangle, Loader2, Send, Mic, RotateCcw,
   CheckCircle2, XCircle, ChevronRight, MapPin,
   Phone, Users, HeartPulse, Droplets, Home, LifeBuoy,
-  Zap, ShieldAlert, Brain, RefreshCw,
+  Zap, ShieldAlert, Brain, RefreshCw, ArrowLeft,
 } from 'lucide-react';
 import {
   Sheet, SheetContent, SheetTitle, SheetDescription,
@@ -19,6 +19,7 @@ import { useVoiceInput } from '@/hooks/use-voice-input';
 import { VoiceMicButton } from '@/components/voice-mic-button';
 import type { NavDestination } from '@/hooks/use-navigation';
 import type { QueuedRequest } from '@/hooks/use-network';
+import { useModalBack } from '@/hooks/use-modal-back';
 
 const API_BASE = 'http://localhost:3001';
 
@@ -94,6 +95,8 @@ interface TriagePanelProps {
 export function TriagePanel({
   open, onOpenChange, region, locationLabel, resources, isOnline, onEnqueue, onNavigate,
 }: TriagePanelProps) {
+  useModalBack(open, () => onOpenChange(false));
+
   const [message, setMessage]         = useState('');
   const [loading, setLoading]         = useState(false);
   const [triage, setTriage]           = useState<TriageResult | null>(null);
@@ -152,14 +155,15 @@ export function TriagePanel({
     setLoading(false);
 
     // ── Auto-enqueue immediately after analysis ────────────────────────────
+    const fallbackCoords = region === 'badrinath' ? '30.55600, 79.56400' : '28.61390, 77.20900';
     const req: QueuedRequest = {
       id:       `triage-${Date.now()}`,
       category: (triageResult.medicalEmergency || triageResult.incidentType === 'Medical Emergency')
                   ? 'medical' : 'rescue',
       details:  triageResult.rawMessage,
       items:    triageResult.requiredResources.join(', '),
-      contact:  '',
-      coords:   '',
+      contact:  '+91 98110 00112',
+      coords:   fallbackCoords,
       createdAt: Date.now(),
       region,
       location: triageResult.location ?? locationLabel,
@@ -193,10 +197,19 @@ export function TriagePanel({
       <SheetContent side="right" className="w-full overflow-y-auto p-0 sm:max-w-lg">
 
         {/* Header */}
-        <div className="sticky top-0 z-10 border-b border-border bg-card/95 px-4 sm:px-6 py-3.5 backdrop-blur-xl">
-          <div className="flex items-center gap-3">
-            <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-alert/15 ring-1 ring-alert/30">
-              <Brain className="h-5 w-5 text-alert" />
+        <div className="sticky top-0 z-10 border-b border-border bg-card/95 px-4 sm:px-6 py-3 sm:py-3.5 backdrop-blur-xl">
+          <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => onOpenChange(false)}
+              className="flex items-center gap-1 rounded-lg border border-border bg-secondary/50 px-2.5 py-1.5 text-xs font-bold text-foreground hover:bg-secondary active:scale-95 transition-all mr-1"
+              aria-label="Go back"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              <span>Back</span>
+            </button>
+            <div className="relative flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-xl bg-alert/15 ring-1 ring-alert/30">
+              <Brain className="h-4 w-4 sm:h-5 sm:w-5 text-alert" />
               {triage?.priority === 'CRITICAL' && (
                 <span className="absolute -top-0.5 -right-0.5 flex h-3 w-3">
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-alert opacity-75" />

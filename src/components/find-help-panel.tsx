@@ -14,6 +14,7 @@ import {
   Filter,
   BedSingle,
   Mic,
+  ArrowLeft,
 } from 'lucide-react';
 import {
   Sheet,
@@ -30,6 +31,7 @@ import { useVoiceInput } from '@/hooks/use-voice-input';
 import { VoiceMicButton } from '@/components/voice-mic-button';
 import { PhoneLink } from '@/components/phone-link';
 import type { NavDestination } from '@/hooks/use-navigation';
+import { useModalBack } from '@/hooks/use-modal-back';
 
 interface FindHelpPanelProps {
   open: boolean;
@@ -58,14 +60,16 @@ const STATUS_META: Record<Resource['status'], { label: string; color: string }> 
 
 const TYPE_FILTERS: { id: ResourceType | 'all'; label: string; icon: typeof Hospital }[] = [
   { id: 'all', label: 'All', icon: Filter },
-  { id: 'hospital', label: 'Hospitals', icon: Hospital },
-  { id: 'pharmacy', label: 'Pharmacies', icon: Pill },
+  { id: 'hospital', label: 'Hospital', icon: Hospital },
+  { id: 'pharmacy', label: 'Pharmacy', icon: Pill },
   { id: 'food', label: 'Food & Water', icon: UtensilsCrossed },
-  { id: 'shelter', label: 'Shelters', icon: Home },
+  { id: 'shelter', label: 'Shelter', icon: Home },
   { id: 'rescue', label: 'Rescue', icon: LifeBuoy },
 ];
 
 export function FindHelpPanel({ open, onOpenChange, resources, locationLabel = 'Delhi NCR', onNavigate }: FindHelpPanelProps) {
+  useModalBack(open, () => onOpenChange(false));
+
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<ResourceType | 'all'>('all');
   const voice = useVoiceInput();
@@ -107,15 +111,24 @@ export function FindHelpPanel({ open, onOpenChange, resources, locationLabel = '
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-full p-0 sm:max-w-lg">
         {/* Header */}
-        <div className="sticky top-0 z-10 border-b border-border bg-card/95 px-4 sm:px-5 py-3.5 sm:py-4 backdrop-blur-xl">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-xl bg-info/15 ring-1 ring-info/30">
-              <Search className="h-4 w-4 sm:h-5 sm:w-5 text-info" />
+        <div className="sticky top-0 z-10 border-b border-border bg-card/95 px-4 sm:px-5 py-3 sm:py-3.5 backdrop-blur-xl">
+          <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => onOpenChange(false)}
+              className="flex items-center gap-1 rounded-lg border border-border bg-secondary/50 px-2.5 py-1.5 text-xs font-bold text-foreground hover:bg-secondary active:scale-95 transition-all mr-1"
+              aria-label="Go back"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              <span>Back</span>
+            </button>
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-info/15 ring-1 ring-info/30">
+              <Search className="h-4 w-4 text-info" />
             </div>
-            <div className="min-w-0">
-              <SheetTitle className="text-base sm:text-lg font-bold">Find Help Near You</SheetTitle>
+            <div className="min-w-0 flex-1">
+              <SheetTitle className="text-base font-bold">Find Help Near You</SheetTitle>
               <SheetDescription className="text-xs truncate">
-                Search hospitals, pharmacies, food, shelters & rescue in NCR
+                Search hospitals, pharmacies, food, shelters & rescue
               </SheetDescription>
             </div>
           </div>

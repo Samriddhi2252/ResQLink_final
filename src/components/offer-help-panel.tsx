@@ -16,6 +16,7 @@ import {
   X,
   Zap,
   Mic,
+  ArrowLeft,
 } from 'lucide-react';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
@@ -28,6 +29,7 @@ import { cn } from '@/lib/utils';
 import type { VolunteerOffer, VolunteerOfferCategory } from '@/types';
 import { useVoiceInput } from '@/hooks/use-voice-input';
 import { VoiceMicButton } from '@/components/voice-mic-button';
+import { useModalBack } from '@/hooks/use-modal-back';
 
 interface OfferHelpPanelProps {
   open: boolean;
@@ -58,6 +60,8 @@ const OFFER_CATEGORIES: { value: VolunteerOfferCategory; label: string; icon: ty
 ];
 
 export function OfferHelpPanel({ open, onOpenChange, offers, loading, error, onCreate }: OfferHelpPanelProps) {
+  useModalBack(open, () => onOpenChange(false));
+
   const fileRef = useRef<HTMLInputElement>(null);
   const [category, setCategory] = useState<VolunteerOfferCategory>('medical');
   const [title, setTitle] = useState('');
@@ -108,22 +112,30 @@ export function OfferHelpPanel({ open, onOpenChange, offers, loading, error, onC
     if (!file) return;
     if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024) {
       setPhotoError('Use a JPG, PNG, or WebP image under 5 MB.');
-      setPhoto(null);
       return;
     }
     setPhotoError('');
     setPhoto(file);
   };
 
-  const handleSubmit = async (event: React.FormEvent) => {
-    event.preventDefault();
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!canSubmit || submitting) return;
     setSubmitting(true);
     try {
-      await onCreate({ category, title, details, quantity, contactName, contactPhone, location, photo });
-      setSuccess(true);
+      await onCreate({
+        category,
+        title: title.trim(),
+        details: details.trim(),
+        quantity: quantity.trim(),
+        contactName: contactName.trim(),
+        contactPhone: contactPhone.trim(),
+        location: location.trim(),
+        photo,
+      });
       resetForm();
-      window.setTimeout(() => setSuccess(false), 2200);
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 3000);
     } catch (cause) {
       setPhotoError(cause instanceof Error ? cause.message : 'Your offer could not be posted.');
     } finally {
@@ -134,18 +146,25 @@ export function OfferHelpPanel({ open, onOpenChange, offers, loading, error, onC
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-full p-0 sm:max-w-xl">
-        <div className="sticky top-0 z-10 border-b border-border bg-card/95 px-4 sm:px-5 py-3.5 sm:py-4 backdrop-blur-xl">
-          <SheetHeader>
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-xl bg-success/15 ring-1 ring-success/30">
-                <BadgeCheck className="h-4 w-4 sm:h-5 sm:w-5 text-success" />
-              </div>
-              <div className="min-w-0">
-                <SheetTitle className="text-base sm:text-lg font-bold">Offer Help</SheetTitle>
-                <SheetDescription className="text-xs truncate">Tell nearby people what you can provide in NCR</SheetDescription>
-              </div>
+        <div className="sticky top-0 z-10 border-b border-border bg-card/95 px-4 sm:px-5 py-3 sm:py-3.5 backdrop-blur-xl">
+          <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => onOpenChange(false)}
+              className="flex items-center gap-1 rounded-lg border border-border bg-secondary/50 px-2.5 py-1.5 text-xs font-bold text-foreground hover:bg-secondary active:scale-95 transition-all mr-1"
+              aria-label="Go back"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              <span>Back</span>
+            </button>
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-success/15 ring-1 ring-success/30">
+              <BadgeCheck className="h-4 w-4 text-success" />
             </div>
-          </SheetHeader>
+            <div className="min-w-0 flex-1">
+              <SheetTitle className="text-base font-bold">Offer Help</SheetTitle>
+              <SheetDescription className="text-xs truncate">Tell nearby people what you can provide</SheetDescription>
+            </div>
+          </div>
         </div>
 
         <ScrollArea className="h-[calc(100dvh-75px)] sm:h-[calc(100dvh-88px)]">

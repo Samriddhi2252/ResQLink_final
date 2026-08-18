@@ -13,6 +13,7 @@ import {
   Loader2,
   CheckCircle2,
   Mic,
+  ArrowLeft,
 } from 'lucide-react';
 import {
   Sheet,
@@ -36,6 +37,7 @@ import { cn } from '@/lib/utils';
 import type { NetworkStatus, QueuedRequest } from '@/hooks/use-network';
 import { useVoiceInput } from '@/hooks/use-voice-input';
 import { VoiceMicButton } from '@/components/voice-mic-button';
+import { useModalBack } from '@/hooks/use-modal-back';
 
 interface SosDrawerProps {
   open: boolean;
@@ -55,6 +57,8 @@ const CATEGORIES = [
 ];
 
 export function SosDrawer({ open, onOpenChange, isOnline, onEnqueue, region, locationLabel }: SosDrawerProps) {
+  useModalBack(open, () => onOpenChange(false));
+
   const [category, setCategory] = useState('');
   const [details, setDetails] = useState('');
   const [items, setItems] = useState('');
@@ -115,13 +119,14 @@ export function SosDrawer({ open, onOpenChange, isOnline, onEnqueue, region, loc
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const fallbackCoords = region === 'badrinath' ? '30.55600, 79.56400' : '28.61390, 77.20900';
     const req: QueuedRequest = {
       id: `local-${Date.now()}`,
-      category: category || 'general',
+      category: category || 'rescue',
       details,
       items,
-      contact,
-      coords,
+      contact: contact.trim() || '+91 98110 00112',
+      coords: coords.trim() || fallbackCoords,
       createdAt: Date.now(),
       region:    region        || 'ncr',
       location:  locationLabel || 'Delhi NCR',
@@ -142,13 +147,22 @@ export function SosDrawer({ open, onOpenChange, isOnline, onEnqueue, region, loc
         side="right"
         className="w-full overflow-y-auto p-0 sm:max-w-md"
       >
-        <div className="sticky top-0 z-10 border-b border-border bg-card/95 px-4 sm:px-6 py-3.5 sm:py-4 backdrop-blur-xl">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-xl bg-alert/15 ring-1 ring-alert/30">
-              <Siren className="h-4 w-4 sm:h-5 sm:w-5 text-alert" />
+        <div className="sticky top-0 z-10 border-b border-border bg-card/95 px-4 sm:px-6 py-3 sm:py-3.5 backdrop-blur-xl">
+          <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => onOpenChange(false)}
+              className="flex items-center gap-1 rounded-lg border border-border bg-secondary/50 px-2.5 py-1.5 text-xs font-bold text-foreground hover:bg-secondary active:scale-95 transition-all mr-1"
+              aria-label="Go back"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              <span>Back</span>
+            </button>
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-alert/15 ring-1 ring-alert/30">
+              <Siren className="h-4 w-4 text-alert" />
             </div>
-            <div className="min-w-0">
-              <SheetTitle className="text-base sm:text-lg font-bold">Request Aid (SOS)</SheetTitle>
+            <div className="min-w-0 flex-1">
+              <SheetTitle className="text-base font-bold">Request Aid (SOS)</SheetTitle>
               <SheetDescription className="text-xs truncate">
                 {isOnline
                   ? `Submitting live · ${locationLabel ?? 'Current region'}`

@@ -759,8 +759,14 @@ export function MapView({ requests, isOnline, selectedId, onSelect, region, them
               font-size="${sz*0.35}" fill="white" font-weight="700">${sym}</text></svg>`;
       const icon = L.divIcon({ html:iconSvg, className:'',
         iconSize:[sz,sz+8], iconAnchor:[sz/2,sz+8], popupAnchor:[0,-(sz+4)] });
+      const lat = (r.coords && r.coords.y > 15 && r.coords.x > 60)
+        ? r.coords.y
+        : center[0] + ((r.coords?.y ?? 50) - 50) * 0.0012;
+      const lng = (r.coords && r.coords.y > 15 && r.coords.x > 60)
+        ? r.coords.x
+        : center[1] + ((r.coords?.x ?? 50) - 50) * 0.0012;
       const marker = L.marker(
-        [center[0]+(r.coords.y-50)*0.0012, center[1]+(r.coords.x-50)*0.0012],
+        [lat, lng],
         { icon, pane:'markerLayer', zIndexOffset:isSel?2000:500 },
       );
       const meta2 = CATEGORY_META[r.category];
@@ -770,12 +776,17 @@ export function MapView({ requests, isOnline, selectedId, onSelect, region, them
             <span style="padding:2px 9px;border-radius:20px;font-size:10px;font-weight:700;
               text-transform:uppercase;background:${fill}20;color:${fill};border:1px solid ${fill}40">${meta2.label}</span>
             <span style="font-size:10px;color:#64748b">${r.distanceMiles}mi${r.peopleCount>0?' · '+r.peopleCount+' people':''}</span>
+            ${r.status === 'in-progress' ? `<span style="padding:2px 6px;border-radius:12px;font-size:9px;font-weight:800;background:#10b98130;color:#34d399;border:1px solid #10b98160">🤝 HELPING ACTIVE</span>` : ''}
+            ${r.isUserCreated ? `<span style="padding:2px 6px;border-radius:12px;font-size:9px;font-weight:800;background:#ef444430;color:#f87171;border:1px solid #ef444460">LIVE SOS</span>` : ''}
           </div>
           <p style="font-size:13px;font-weight:700;color:#f1f5f9;margin:0 0 4px">${r.title}</p>
           <p style="font-size:11px;color:#8fb4d4;margin:0 0 8px;line-height:1.6">${r.details}</p>
           ${r.items.length>0?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">
             ${r.items.map(i=>`<span style="background:#162840;border:1px solid #2a4a68;border-radius:5px;padding:2px 7px;font-size:10px;color:#93c5fd">${i}</span>`).join('')}</div>`:''}
-          <div style="padding-top:8px;border-top:1px solid #1e3a52;font-size:11px;color:#5d8aaa">📞 ${r.contactPhone}</div>
+          <div style="padding-top:8px;border-top:1px solid #1e3a52;display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:11px">
+            <span>📞 <a href="tel:${r.contactPhone ? r.contactPhone.replace(/[\s\-().]/g,'') : ''}" style="color:#38bdf8;font-weight:700;text-decoration:none" onclick="event.stopPropagation()">${r.contactPhone || 'No phone'}</a></span>
+            <span style="color:#94a3b8;font-size:10px">${r.contactName || 'Requester'}</span>
+          </div>
         </div>`,
         { className:'map-popup', maxWidth:260 },
       );
@@ -790,7 +801,16 @@ export function MapView({ requests, isOnline, selectedId, onSelect, region, them
     if (!selectedId || !mapRef.current) return;
     const r = requests.find(req=>req.id===selectedId); if(!r) return;
     const center = rmeta.center;
-    mapRef.current.panTo([center[0]+(r.coords.y-50)*0.0012, center[1]+(r.coords.x-50)*0.0012]);
+    const lat = (r.coords && r.coords.y > 15 && r.coords.x > 60)
+      ? r.coords.y
+      : center[0] + ((r.coords?.y ?? 50) - 50) * 0.0012;
+    const lng = (r.coords && r.coords.y > 15 && r.coords.x > 60)
+      ? r.coords.x
+      : center[1] + ((r.coords?.x ?? 50) - 50) * 0.0012;
+    mapRef.current.panTo([lat, lng]);
+    if (reqMarkersRef.current[r.id]) {
+      reqMarkersRef.current[r.id].openPopup();
+    }
   }, [selectedId, requests]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Layer toggle ─────────────────────────────────────────────────────────

@@ -1,4 +1,4 @@
-import { Home, Users, MapPin, Navigation, X, ExternalLink } from 'lucide-react';
+import { Home, Users, MapPin, Navigation, X, ExternalLink, ArrowLeft } from 'lucide-react';
 import {
   Sheet,
   SheetContent,
@@ -10,6 +10,7 @@ import { Progress } from '@/components/ui/progress';
 import { cn, buildGoogleMapsUrl } from '@/lib/utils';
 import type { Shelter } from '@/types';
 import type { NavDestination } from '@/hooks/use-navigation';
+import { useModalBack } from '@/hooks/use-modal-back';
 
 interface ShelterWidgetProps {
   shelters: Shelter[];
@@ -20,6 +21,8 @@ interface ShelterWidgetProps {
 }
 
 export function ShelterWidget({ shelters, open, onOpenChange, locationLabel = 'Delhi NCR', onNavigate }: ShelterWidgetProps) {
+  useModalBack(open, () => onOpenChange(false));
+
   const totalCapacity = shelters.reduce((s, sh) => s + sh.capacity, 0);
   const totalOccupied = shelters.reduce((s, sh) => s + sh.occupied, 0);
   const overallPct = Math.round((totalOccupied / totalCapacity) * 100);
@@ -31,13 +34,22 @@ export function ShelterWidget({ shelters, open, onOpenChange, locationLabel = 'D
         side="right"
         className="w-full overflow-y-auto p-0 sm:max-w-md"
       >
-        <div className="sticky top-0 z-10 border-b border-border bg-card/95 px-4 sm:px-6 py-3.5 sm:py-4 backdrop-blur-xl">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-xl bg-info/15 ring-1 ring-info/30">
-              <Home className="h-4 w-4 sm:h-5 sm:w-5 text-info" />
+        <div className="sticky top-0 z-10 border-b border-border bg-card/95 px-4 sm:px-6 py-3 sm:py-3.5 backdrop-blur-xl">
+          <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => onOpenChange(false)}
+              className="flex items-center gap-1 rounded-lg border border-border bg-secondary/50 px-2.5 py-1.5 text-xs font-bold text-foreground hover:bg-secondary active:scale-95 transition-all mr-1"
+              aria-label="Go back"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              <span>Back</span>
+            </button>
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-info/15 ring-1 ring-info/30">
+              <Home className="h-4 w-4 text-info" />
             </div>
-            <div className="min-w-0">
-              <SheetTitle className="text-base sm:text-lg font-bold">Shelter Portal</SheetTitle>
+            <div className="min-w-0 flex-1">
+              <SheetTitle className="text-base font-bold">Shelter Portal</SheetTitle>
               <SheetDescription className="text-xs truncate">
                 {openCount} shelters open · {totalCapacity - totalOccupied} beds available
               </SheetDescription>

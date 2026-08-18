@@ -1,13 +1,14 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   MessageCircle, X, Send, Bot, User, WifiOff,
-  Loader2, RotateCcw, Sparkles, Zap,
+  Loader2, RotateCcw, Sparkles, Zap, ArrowLeft,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { findOfflineAnswer, SUGGESTED_QUESTIONS } from '@/data/help-bot-knowledge';
 import type { RegionContext } from '@/data/help-bot-knowledge';
 import type { MapRegion } from '@/components/map-view';
 import type { Shelter, Resource, AidRequest } from '@/types';
+import { useModalBack } from '@/hooks/use-modal-back';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -98,6 +99,8 @@ function uid() { return Math.random().toString(36).slice(2, 10); }
 
 export function HelpBot({ region, locationLabel, shelters, resources, requests, isOnline }: HelpBotProps) {
   const [open, setOpen]             = useState(false);
+  useModalBack(open, () => setOpen(false));
+
   const [input, setInput]           = useState('');
   const [messages, setMessages]     = useState<Message[]>([]);
   const [loading, setLoading]       = useState(false);
@@ -300,7 +303,16 @@ What do you need?`,
           )}>
 
             {/* ── Header ── */}
-            <div className="flex shrink-0 items-center gap-2.5 border-b border-border bg-card/95 px-4 py-3 backdrop-blur-md">
+            <div className="flex shrink-0 items-center gap-2.5 border-b border-border bg-card/95 px-3.5 py-2.5 sm:px-4 sm:py-3 backdrop-blur-md">
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="flex items-center gap-1 rounded-lg border border-border bg-secondary/50 px-2 py-1 text-xs font-bold text-foreground hover:bg-secondary active:scale-95 transition-all mr-0.5"
+                aria-label="Go back"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" />
+                <span>Back</span>
+              </button>
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-info/15">
                 <Bot className="h-4 w-4 text-info" />
               </div>

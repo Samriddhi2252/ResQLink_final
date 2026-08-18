@@ -7,7 +7,7 @@ export type RequestCategory =
 
 export type RequestPriority = 'critical' | 'urgent' | 'moderate';
 
-export type RequestStatus = 'active' | 'fulfilled' | 'queued';
+export type RequestStatus = 'active' | 'in-progress' | 'fulfilled' | 'queued';
 
 export interface AidRequest {
   id: string;
@@ -23,6 +23,19 @@ export interface AidRequest {
   createdAt: number;
   coords: { x: number; y: number };
   peopleCount: number;
+  isUserCreated?: boolean;
+  region?: string;
+  triage?: {
+    priority: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
+    incidentType: string;
+    people: number | null;
+    vulnerable?: { elderly: number; children: number; pregnant: number; disabled: number; injured: number };
+    dangerIndicators?: string[];
+    priorityReasons?: string[];
+    requiredResources?: string[];
+    rawMessage?: string;
+    parsedBy?: 'gemini' | 'fallback';
+  };
 }
 
 export interface Shelter {

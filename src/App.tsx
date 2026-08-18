@@ -14,14 +14,17 @@ import { useNetwork, useOfflineQueue } from '@/hooks/use-network';
 import { useVolunteerOffers } from '@/hooks/use-volunteer-offers';
 import { useTheme } from '@/hooks/use-theme';
 import { REGION_DATA } from '@/mockData';
+import type { RegionKey } from '@/mockData';
 import { Navigation } from 'lucide-react';
-import type { FilterCategory } from '@/types';
+import type { FilterCategory, AidRequest, RequestCategory, RequestStatus } from '@/types';
 import { cn } from '@/lib/utils';
 import { HelpBot } from '@/components/help-bot';
 import { TriagePanel } from '@/components/triage-panel';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
 import type { NavDestination } from '@/hooks/use-navigation';
+
+import { useCrossDeviceSync } from '@/hooks/use-cross-device-sync';
 
 function App() {
   const { status, toggle, isOnline } = useNetwork();
@@ -40,24 +43,122 @@ function App() {
   const [mobileTab, setMobileTab]   = useState<MobileTab>('map');
   const [navDest, setNavDest]       = useState<NavDestination | null>(null);
 
+  // ── Shared Real-Time Cross-Device Sync State (Laptop + Mobile + Cloud) ────
+  const {
+    customRequests,
+    resolvedRequestIds,
+    helpingRequestIds,
+    addCustomRequest,
+    resolveRequest: handleResolveRequest,
+    helpRequest: handleHelpRequest,
+    cancelHelpRequest: handleCancelHelp,
+    restoreRequests: handleRestoreRequests,
+  } = useCrossDeviceSync();
+
   // ── All data is derived from the selected region ──────────────────────────
   const regionKey   = region === 'ncr' ? 'ncr' : 'badrinath';
   const regionData  = useMemo(() => REGION_DATA[regionKey], [regionKey]);
-  const requests    = regionData.requests;
+
+  // Combined requests: User SOS requests for this region appear first!
+  const requests = useMemo(() => {
+    const regionCustom = customRequests.filter((r) =>
+      r.region ? r.region === regionKey : true
+    );
+    const combined = [...regionCustom, ...regionData.requests];
+    return combined
+      .filter((r) => !resolvedRequestIds.includes(r.id))
+      .map((r) => ({
+        ...r,
+        status: (helpingRequestIds.includes(r.id) ? 'in-progress' : (r.status || 'active')) as RequestStatus,
+      }));
+  }, [customRequests, regionKey, regionData.requests, resolvedRequestIds, helpingRequestIds]);
+
   const shelters    = regionData.shelters;
   const volunteers  = regionData.volunteers;
   const resources   = regionData.resources;
   const locationLabel = regionData.locationLabel;
 
   const handleEnqueue = (req: Parameters<typeof enqueue>[0]) => {
+    // 1. Add to offline outbox/sync queue
     enqueue(req);
+
+    // 2. Parse coordinates:
+    let coords = { x: 50, y: 50 };
+    if (req.coords) {
+      const parts = req.coords.split(',').map((s) => parseFloat(s.trim()));
+      if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+        // [lat, lng] -> store lat in y, lng in x
+        coords = { y: parts[0], x: parts[1] };
+      }
+    } else {
+      // Fallback default coordinates for the region
+      coords = region === 'badrinath' ? { y: 30.5560, x: 79.5640 } : { y: 28.6139, x: 77.2090 };
+    }
+
+    // 3. Parse contact info:
+    let contactName = 'Emergency Requester';
+    let contactPhone = req.contact ? req.contact.trim() : '';
+    if (req.contact) {
+      const phoneMatch = req.contact.match(/(\+?\d[\d\s\-]{8,})/);
+      if (phoneMatch) {
+        contactPhone = phoneMatch[0].trim();
+        const namePart = req.contact.replace(phoneMatch[0], '').trim();
+        if (namePart) contactName = namePart;
+      }
+    }
+    if (!contactPhone) {
+      contactPhone = '+91 98110 00112';
+    }
+
+    // 4. Create active AidRequest
+    const category: RequestCategory = (['medical', 'food', 'shelter', 'volunteers', 'rescue'].includes(req.category)
+      ? req.category
+      : 'rescue') as RequestCategory;
+
+    const title = req.triage?.incidentType
+      ? `SOS: ${req.triage.incidentType} Emergency`
+      : req.details
+      ? req.details.length > 48
+        ? req.details.slice(0, 46) + '…'
+        : req.details
+      : 'Emergency SOS Aid Request';
+
+    const newAidRequest: AidRequest = {
+      id: req.id,
+      category,
+      priority: req.triage?.priority === 'LOW'
+        ? 'moderate'
+        : req.triage?.priority === 'MEDIUM'
+        ? 'urgent'
+        : 'critical',
+      status: 'active',
+      title,
+      details: req.details || req.triage?.rawMessage || 'Urgent emergency assistance requested.',
+      items: req.items
+        ? req.items.split(',').map((s) => s.trim()).filter(Boolean)
+        : req.triage?.requiredResources || ['Emergency Assistance', 'Rescue / Aid'],
+      contactName,
+      contactPhone,
+      distanceMiles: 0.1,
+      createdAt: req.createdAt || Date.now(),
+      coords,
+      peopleCount: req.triage?.people || 1,
+      isUserCreated: true,
+      region: (req.region as RegionKey) || regionKey,
+      triage: req.triage,
+    };
+
+    addCustomRequest(newAidRequest);
+
+    setSelectedId(newAidRequest.id);
+
     if (!isOnline) {
-      toast.success('Request queued offline', {
-        description: 'It will auto-sync when you reconnect.',
+      toast.success('SOS Request Saved & Queued Offline', {
+        description: 'Your request is visible in the feed and will sync when you reconnect.',
       });
     } else {
-      toast.success('SOS request submitted', {
-        description: 'Nearby responders have been notified.',
+      toast.success('🚨 SOS Request Broadcast Live!', {
+        description: `${newAidRequest.title} broadcast to all responders and synced across all devices.`,
       });
     }
   };
@@ -134,6 +235,11 @@ function App() {
               onSelect={handleSelect}
               locationLabel={locationLabel}
               onNavigate={handleNavigate}
+              region={region}
+              onResolveRequest={handleResolveRequest}
+              onHelpRequest={handleHelpRequest}
+              onCancelHelp={handleCancelHelp}
+              onRestoreRequests={handleRestoreRequests}
             />
           </div>
         </div>
@@ -169,6 +275,11 @@ function App() {
                 onSelect={handleSelect}
                 locationLabel={locationLabel}
                 onNavigate={handleNavigate}
+                region={region}
+                onResolveRequest={handleResolveRequest}
+                onHelpRequest={handleHelpRequest}
+                onCancelHelp={handleCancelHelp}
+                onRestoreRequests={handleRestoreRequests}
               />
             </div>
           )}

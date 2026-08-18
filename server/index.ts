@@ -2,14 +2,58 @@ import express, { Request, Response } from 'express';
 import cors from 'cors';
 import { GoogleGenAI } from '@google/genai';
 import * as dotenv from 'dotenv';
+import * as fs from 'fs';
+import * as path from 'path';
 
 dotenv.config();
 
 const app  = express();
 const PORT = process.env.PORT || 3001;
 
-app.use(cors({ origin: ['http://localhost:5173', 'http://localhost:4173'] }));
-app.use(express.json({ limit: '32kb' }));
+// Allow requests from all origins (localhost, Wi-Fi LAN IP, mobile devices)
+app.use(cors({ origin: true, credentials: true }));
+app.use(express.json({ limit: '64kb' }));
+
+// ── Shared Cross-Device Sync Store ───────────────────────────────────────────
+const DATA_DIR = path.join(__dirname, 'data');
+const DATA_FILE = path.join(DATA_DIR, 'sync-store.json');
+
+if (!fs.existsSync(DATA_DIR)) {
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+  } catch (e) {
+    console.error('[SyncStore] mkdir error:', e);
+  }
+}
+
+interface SyncStore {
+  requests: any[];
+  resolvedIds: string[];
+  helpingIds: string[];
+  version: number;
+}
+
+function readStore(): SyncStore {
+  try {
+    if (fs.existsSync(DATA_FILE)) {
+      const raw = fs.readFileSync(DATA_FILE, 'utf8');
+      return JSON.parse(raw);
+    }
+  } catch (e) {
+    console.error('[SyncStore] Read error:', e);
+  }
+  return { requests: [], resolvedIds: [], helpingIds: [], version: 1 };
+}
+
+function writeStore(data: SyncStore) {
+  try {
+    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf8');
+  } catch (e) {
+    console.error('[SyncStore] Write error:', e);
+  }
+}
+
+let syncStore = readStore();
 
 // ── Gemini client ────────────────────────────────────────────────────────────
 const API_KEY = process.env.GEMINI_API_KEY;
@@ -36,7 +80,79 @@ Your responsibilities are:
 
 // ── Health check ─────────────────────────────────────────────────────────────
 app.get('/health', (_req: Request, res: Response) => {
-  res.json({ ok: true, gemini: GEMINI_READY });
+  res.json({ ok: true, gemini: GEMINI_READY, syncRequestsCount: syncStore.requests.length });
+});
+
+// ── Real-Time Cross-Device Sync Endpoints ────────────────────────────────────
+app.get('/api/sync', (_req: Request, res: Response) => {
+  res.json(syncStore);
+});
+
+app.post('/api/sync/request', (req: Request, res: Response) => {
+  const newReq = req.body;
+  if (!newReq || !newReq.id) {
+    res.status(400).json({ error: 'Invalid request payload.' });
+    return;
+  }
+  const idx = syncStore.requests.findIndex((r) => r.id === newReq.id);
+  if (idx >= 0) {
+    syncStore.requests[idx] = newReq;
+  } else {
+    syncStore.requests.unshift(newReq);
+  }
+  // Ensure it's not marked resolved if re-submitted
+  syncStore.resolvedIds = syncStore.resolvedIds.filter((id) => id !== newReq.id);
+  syncStore.version += 1;
+  writeStore(syncStore);
+  res.json({ ok: true, store: syncStore });
+});
+
+app.post('/api/sync/resolve', (req: Request, res: Response) => {
+  const { id } = req.body as { id: string };
+  if (!id) {
+    res.status(400).json({ error: 'Missing request id.' });
+    return;
+  }
+  if (!syncStore.resolvedIds.includes(id)) {
+    syncStore.resolvedIds.push(id);
+  }
+  syncStore.requests = syncStore.requests.filter((r) => r.id !== id);
+  syncStore.version += 1;
+  writeStore(syncStore);
+  res.json({ ok: true, store: syncStore });
+});
+
+app.post('/api/sync/help', (req: Request, res: Response) => {
+  const { id } = req.body as { id: string };
+  if (!id) {
+    res.status(400).json({ error: 'Missing request id.' });
+    return;
+  }
+  if (!syncStore.helpingIds.includes(id)) {
+    syncStore.helpingIds.push(id);
+  }
+  syncStore.version += 1;
+  writeStore(syncStore);
+  res.json({ ok: true, store: syncStore });
+});
+
+app.post('/api/sync/cancel-help', (req: Request, res: Response) => {
+  const { id } = req.body as { id: string };
+  if (!id) {
+    res.status(400).json({ error: 'Missing request id.' });
+    return;
+  }
+  syncStore.helpingIds = syncStore.helpingIds.filter((item) => item !== id);
+  syncStore.version += 1;
+  writeStore(syncStore);
+  res.json({ ok: true, store: syncStore });
+});
+
+app.post('/api/sync/restore', (_req: Request, res: Response) => {
+  syncStore.resolvedIds = [];
+  syncStore.version += 1;
+  writeStore(syncStore);
+  res.json({ ok: true, store: syncStore });
 });
 
 // ── Chat endpoint ─────────────────────────────────────────────────────────────
