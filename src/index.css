@@ -6,6 +6,7 @@
 
 @layer base {
   :root {
+    /* ── Dark theme (default) ── */
     --background: 222 47% 11%;
     --foreground: 210 40% 98%;
     --card: 215 28% 17%;
@@ -31,6 +32,35 @@
     --warning: 25 95% 53%;
     --success: 160 84% 39%;
     --info: 217 91% 60%;
+  }
+
+  /* ── Light theme ── */
+  .light {
+    --background: 210 20% 98%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 222 47% 11%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 16% 93%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 210 16% 93%;
+    --muted-foreground: 215 20% 40%;
+    --accent: 210 16% 93%;
+    --accent-foreground: 222 47% 11%;
+    --destructive: 0 84% 55%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214 20% 82%;
+    --input: 214 20% 82%;
+    --ring: 0 84% 55%;
+    --radius: 0.625rem;
+
+    --alert: 0 84% 52%;
+    --warning: 25 90% 48%;
+    --success: 160 70% 32%;
+    --info: 217 82% 48%;
   }
 }
 
@@ -271,3 +301,45 @@
 .leaflet-marker-pane  { z-index: 400; }
 .leaflet-popup-pane   { z-index: 500; }
 .leaflet-tooltip-pane { z-index: 600; }
+
+/* ── Light mode — Leaflet map overrides ─────────────────────────────────── */
+.light .leaflet-container {
+  background: #dce8f0 !important;
+}
+.light .map-popup .leaflet-popup-content-wrapper {
+  background: #ffffff;
+  color: #1e293b;
+  border: 1px solid #cbd5e1;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.14);
+}
+.light .map-popup .leaflet-popup-tip { background: #ffffff; }
+.light .map-popup .leaflet-popup-close-button {
+  color: #64748b !important;
+  background: #f1f5f9 !important;
+}
+.light .map-popup .leaflet-popup-close-button:hover {
+  color: #1e293b !important;
+  background: #e2e8f0 !important;
+}
+.light .map-tt {
+  background: #ffffff !important;
+  color: #1e293b !important;
+  border: 1px solid #cbd5e1 !important;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.10) !important;
+}
+.light .map-tt .tt-row  { color: #0f172a; }
+.light .map-tt .tt-hwy  { background: #dbeafe; color: #1d4ed8; }
+.light .map-tt .tt-sub  { color: #64748b; }
+.light .map-tt::before  { border-top-color: #cbd5e1 !important; }
+.light .map-ctrl-btn {
+  border: 1px solid #cbd5e1;
+  background: rgba(255,255,255,0.95);
+  color: #374151;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.10);
+}
+.light .map-ctrl-btn:hover { background: #f1f5f9; border-color: #94a3b8; }
+.light .leaflet-control-attribution {
+  background: rgba(255,255,255,0.82) !important;
+  color: #64748b !important;
+}
+.light .leaflet-control-attribution a { color: #2563eb !important; }

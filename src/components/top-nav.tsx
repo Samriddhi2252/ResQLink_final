@@ -1,4 +1,4 @@
-import { Siren, Building2, Wifi, WifiOff, Power, Search, BadgeCheck, Menu, MoreVertical } from 'lucide-react';
+import { Siren, Building2, Wifi, WifiOff, Power, Search, BadgeCheck, Menu, Sun, Moon, Brain } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import {
@@ -19,9 +19,12 @@ interface TopNavProps {
   onShelter: () => void;
   onFindHelp: () => void;
   onOfferHelp: () => void;
+  theme: 'dark' | 'light';
+  onToggleTheme: () => void;
+  onTriage?: () => void;
 }
 
-export function TopNav({ status, onToggleNetwork, onSos, onShelter, onFindHelp, onOfferHelp }: TopNavProps) {
+export function TopNav({ status, onToggleNetwork, onSos, onShelter, onFindHelp, onOfferHelp, theme, onToggleTheme, onTriage }: TopNavProps) {
   const isOnline = status === 'online';
 
   return (
@@ -106,6 +109,18 @@ export function TopNav({ status, onToggleNetwork, onSos, onShelter, onFindHelp, 
               <span>Find Help</span>
             </Button>
 
+            {onTriage && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onTriage}
+                className="border-warning/30 bg-warning/10 hover:bg-warning/20 text-xs sm:text-sm"
+              >
+                <Brain className="mr-1.5 h-3.5 w-3.5 sm:h-4 sm:w-4 text-warning" />
+                <span>AI Triage</span>
+              </Button>
+            )}
+
             <Button
               variant="outline"
               size="sm"
@@ -126,6 +141,23 @@ export function TopNav({ status, onToggleNetwork, onSos, onShelter, onFindHelp, 
             <Siren className="mr-1 sm:mr-1.5 h-3.5 w-3.5 sm:h-4 sm:w-4" />
             <span className="font-bold text-xs sm:text-sm">Request Aid</span>
           </Button>
+
+          {/* Theme toggle (always visible) */}
+          <button
+            onClick={onToggleTheme}
+            title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            aria-label="Toggle theme"
+            className={cn(
+              'flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-lg',
+              'border border-border bg-secondary/40 text-muted-foreground',
+              'transition-colors hover:bg-secondary hover:text-foreground active:scale-95',
+            )}
+          >
+            {theme === 'dark'
+              ? <Sun className="h-4 w-4 text-warning" />
+              : <Moon className="h-4 w-4 text-info" />
+            }
+          </button>
 
           {/* Mobile Menu Dropdown (< md) */}
           <div className="md:hidden">
@@ -158,12 +190,32 @@ export function TopNav({ status, onToggleNetwork, onSos, onShelter, onFindHelp, 
                   <Search className="h-4 w-4 text-info" />
                   <span>Find Help Near You</span>
                 </DropdownMenuItem>
+                {onTriage && (
+                  <DropdownMenuItem
+                    onClick={onTriage}
+                    className="flex items-center gap-2 py-2 px-2 text-xs font-medium cursor-pointer rounded-md focus:bg-secondary"
+                  >
+                    <Brain className="h-4 w-4 text-warning" />
+                    <span>AI Emergency Triage</span>
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem
                   onClick={onShelter}
                   className="flex items-center gap-2 py-2 px-2 text-xs font-medium cursor-pointer rounded-md focus:bg-secondary"
                 >
                   <Building2 className="h-4 w-4 text-info" />
                   <span>Shelter Portal</span>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator className="my-1 bg-border" />
+                <DropdownMenuItem
+                  onClick={onToggleTheme}
+                  className="flex items-center gap-2 py-2 px-2 text-xs font-medium cursor-pointer rounded-md focus:bg-secondary"
+                >
+                  {theme === 'dark'
+                    ? <Sun className="h-4 w-4 text-warning" />
+                    : <Moon className="h-4 w-4 text-info" />
+                  }
+                  <span>{theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}</span>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator className="my-1 bg-border" />
                 <div className="flex items-center justify-between px-2 py-1.5 text-xs">

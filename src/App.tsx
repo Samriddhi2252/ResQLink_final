@@ -12,31 +12,42 @@ import { MobileNav } from '@/components/mobile-nav';
 import type { MobileTab } from '@/components/mobile-nav';
 import { useNetwork, useOfflineQueue } from '@/hooks/use-network';
 import { useVolunteerOffers } from '@/hooks/use-volunteer-offers';
-import { MOCK_REQUESTS, MOCK_SHELTERS, MOCK_VOLUNTEERS, MOCK_RESOURCES } from '@/mockData';
+import { useTheme } from '@/hooks/use-theme';
+import { REGION_DATA } from '@/mockData';
 import { Navigation } from 'lucide-react';
 import type { FilterCategory } from '@/types';
-import { cn, openGoogleMapsDirections } from '@/lib/utils';
+import { cn } from '@/lib/utils';
+import { HelpBot } from '@/components/help-bot';
+import { TriagePanel } from '@/components/triage-panel';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
+import type { NavDestination } from '@/hooks/use-navigation';
 
 function App() {
   const { status, toggle, isOnline } = useNetwork();
-  const { queue, enqueue, clearQueue, queueCount } = useOfflineQueue(isOnline);
+  const { queue, enqueue, clearQueue, removeFromQueue, queueCount } = useOfflineQueue(isOnline);
   const { offers, loading: offersLoading, error: offersError, createOffer } = useVolunteerOffers();
+  const { theme, toggle: toggleTheme } = useTheme();
 
-  const [filter, setFilter] = useState<FilterCategory>('all');
-  const [region, setRegion] = useState<MapRegion>('ncr');
-  const [sosOpen, setSosOpen] = useState(false);
-  const [shelterOpen, setShelterOpen] = useState(false);
-  const [findHelpOpen, setFindHelpOpen] = useState(false);
+  const [filter, setFilter]         = useState<FilterCategory>('all');
+  const [region, setRegion]         = useState<MapRegion>('ncr');
+  const [sosOpen, setSosOpen]       = useState(false);
+  const [shelterOpen, setShelterOpen]     = useState(false);
+  const [findHelpOpen, setFindHelpOpen]   = useState(false);
   const [offerHelpOpen, setOfferHelpOpen] = useState(false);
+  const [triageOpen, setTriageOpen]       = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [mobileTab, setMobileTab] = useState<MobileTab>('map');
+  const [mobileTab, setMobileTab]   = useState<MobileTab>('map');
+  const [navDest, setNavDest]       = useState<NavDestination | null>(null);
 
-  const requests = useMemo(() => MOCK_REQUESTS, []);
-  const shelters = useMemo(() => MOCK_SHELTERS, []);
-  const volunteers = useMemo(() => MOCK_VOLUNTEERS, []);
-  const resources = useMemo(() => MOCK_RESOURCES, []);
+  // ── All data is derived from the selected region ──────────────────────────
+  const regionKey   = region === 'ncr' ? 'ncr' : 'badrinath';
+  const regionData  = useMemo(() => REGION_DATA[regionKey], [regionKey]);
+  const requests    = regionData.requests;
+  const shelters    = regionData.shelters;
+  const volunteers  = regionData.volunteers;
+  const resources   = regionData.resources;
+  const locationLabel = regionData.locationLabel;
 
   const handleEnqueue = (req: Parameters<typeof enqueue>[0]) => {
     enqueue(req);
@@ -59,6 +70,15 @@ function App() {
   const handleRegionChange = (r: MapRegion) => {
     setRegion(r);
     setSelectedId(null);
+    setFilter('all');
+    setNavDest(null);
+  };
+
+  const handleNavigate = (dest: NavDestination) => {
+    setNavDest(dest);
+    setMobileTab('map'); // switch to map tab on mobile
+    setShelterOpen(false);
+    setFindHelpOpen(false);
   };
 
   return (
@@ -70,6 +90,9 @@ function App() {
         onShelter={() => setShelterOpen(true)}
         onFindHelp={() => setFindHelpOpen(true)}
         onOfferHelp={() => setOfferHelpOpen(true)}
+        theme={theme}
+        onToggleTheme={toggleTheme}
+        onTriage={() => setTriageOpen(true)}
       />
 
       <StatusBanner
@@ -82,9 +105,9 @@ function App() {
 
       {/* Main content */}
       <main className="mx-auto w-full max-w-[1600px] flex-1 px-3 py-3 sm:px-6 sm:py-4">
+
         {/* Desktop: 2-column grid */}
         <div className="hidden gap-4 lg:grid lg:grid-cols-[1.4fr_1fr]">
-          {/* Map */}
           <div className="h-[calc(100vh-210px)] min-h-[500px]">
             <MapView
               requests={requests}
@@ -94,10 +117,10 @@ function App() {
               selectedId={selectedId}
               onSelect={handleSelect}
               region={region}
+              theme={theme}
+              navDestination={navDest}
             />
           </div>
-
-          {/* Feed */}
           <div className="h-[calc(100vh-210px)] min-h-[500px] overflow-hidden rounded-xl border border-border bg-card">
             <LiveFeed
               requests={requests}
@@ -106,8 +129,11 @@ function App() {
               queue={queue}
               queueCount={queueCount}
               onClearQueue={clearQueue}
+              onRemoveFromQueue={removeFromQueue}
               selectedId={selectedId}
               onSelect={handleSelect}
+              locationLabel={locationLabel}
+              onNavigate={handleNavigate}
             />
           </div>
         </div>
@@ -124,6 +150,8 @@ function App() {
                 selectedId={selectedId}
                 onSelect={handleSelect}
                 region={region}
+                theme={theme}
+                navDestination={navDest}
               />
             </div>
           )}
@@ -136,8 +164,11 @@ function App() {
                 queue={queue}
                 queueCount={queueCount}
                 onClearQueue={clearQueue}
+                onRemoveFromQueue={removeFromQueue}
                 selectedId={selectedId}
                 onSelect={handleSelect}
+                locationLabel={locationLabel}
+                onNavigate={handleNavigate}
               />
             </div>
           )}
@@ -153,7 +184,7 @@ function App() {
                 </div>
               </div>
               {shelters.map((s) => {
-                const pct = Math.round((s.occupied / s.capacity) * 100);
+                const pct    = Math.round((s.occupied / s.capacity) * 100);
                 const isFull = s.status === 'full';
                 return (
                   <div key={s.id} className="rounded-xl border border-border bg-card p-4">
@@ -174,7 +205,13 @@ function App() {
                       <div className={`h-full rounded-full ${isFull ? 'bg-alert' : 'bg-success'}`} style={{ width: `${pct}%` }} />
                     </div>
                     <button
-                      onClick={() => openGoogleMapsDirections(`${s.name}, ${s.address}, Delhi NCR`)}
+                      onClick={() => handleNavigate({
+                        id: s.id,
+                        name: s.name,
+                        address: s.address,
+                        coords: [s.coords.y, s.coords.x] as [number, number],
+                        type: 'shelter',
+                      })}
                       className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg border border-border bg-secondary/40 py-2 text-xs font-bold transition-colors hover:bg-secondary active:scale-[0.99]"
                     >
                       <Navigation className="h-3.5 w-3.5 text-info" /> Get Directions
@@ -193,16 +230,32 @@ function App() {
         onOpenChange={setSosOpen}
         isOnline={isOnline}
         onEnqueue={handleEnqueue}
+        region={region}
+        locationLabel={locationLabel}
+      />
+      <TriagePanel
+        open={triageOpen}
+        onOpenChange={setTriageOpen}
+        region={regionKey}
+        locationLabel={locationLabel}
+        resources={resources}
+        isOnline={isOnline}
+        onEnqueue={handleEnqueue}
+        onNavigate={handleNavigate}
       />
       <ShelterWidget
         shelters={shelters}
         open={shelterOpen}
         onOpenChange={setShelterOpen}
+        locationLabel={locationLabel}
+        onNavigate={handleNavigate}
       />
       <FindHelpPanel
         open={findHelpOpen}
         onOpenChange={setFindHelpOpen}
         resources={resources}
+        locationLabel={locationLabel}
+        onNavigate={handleNavigate}
       />
       <OfferHelpPanel
         open={offerHelpOpen}
@@ -218,16 +271,23 @@ function App() {
         }}
       />
 
-      {/* Mobile bottom nav */}
       <MobileNav
         active={mobileTab}
         onChange={setMobileTab}
         onSos={() => setSosOpen(true)}
       />
 
-      {/* Mobile bottom spacer */}
-      <div className="h-20 pb-[max(0.5rem,env(safe-area-inset-bottom))] lg:hidden" />
+      {/* Help Bot — floats over everything, region-aware */}
+      <HelpBot
+        region={region}
+        locationLabel={locationLabel}
+        shelters={shelters}
+        resources={resources}
+        requests={requests}
+        isOnline={isOnline}
+      />
 
+      <div className="h-20 pb-[max(0.5rem,env(safe-area-inset-bottom))] lg:hidden" />
       <Toaster />
     </div>
   );

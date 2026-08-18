@@ -7,9 +7,9 @@ import {
   Home,
   LifeBuoy,
   MapPin,
-  Phone,
   Clock,
   Navigation,
+  ExternalLink,
   X,
   Filter,
   BedSingle,
@@ -24,15 +24,19 @@ import {
 } from '@/components/ui/sheet';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { cn, openGoogleMapsDirections } from '@/lib/utils';
+import { cn, buildGoogleMapsUrl } from '@/lib/utils';
 import type { Resource, ResourceType } from '@/types';
 import { useVoiceInput } from '@/hooks/use-voice-input';
 import { VoiceMicButton } from '@/components/voice-mic-button';
+import { PhoneLink } from '@/components/phone-link';
+import type { NavDestination } from '@/hooks/use-navigation';
 
 interface FindHelpPanelProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   resources: Resource[];
+  locationLabel?: string;
+  onNavigate?: (dest: NavDestination) => void;
 }
 
 const TYPE_META: Record<
@@ -61,7 +65,7 @@ const TYPE_FILTERS: { id: ResourceType | 'all'; label: string; icon: typeof Hosp
   { id: 'rescue', label: 'Rescue', icon: LifeBuoy },
 ];
 
-export function FindHelpPanel({ open, onOpenChange, resources }: FindHelpPanelProps) {
+export function FindHelpPanel({ open, onOpenChange, resources, locationLabel = 'Delhi NCR', onNavigate }: FindHelpPanelProps) {
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<ResourceType | 'all'>('all');
   const voice = useVoiceInput();
@@ -193,7 +197,7 @@ export function FindHelpPanel({ open, onOpenChange, resources }: FindHelpPanelPr
               </div>
             ) : (
               filtered.map((r, i) => (
-                <ResourceCard key={r.id} resource={r} index={i} />
+                <ResourceCard key={r.id} resource={r} index={i} locationLabel={locationLabel} onNavigate={onNavigate} />
               ))
             )}
           </div>
@@ -203,7 +207,7 @@ export function FindHelpPanel({ open, onOpenChange, resources }: FindHelpPanelPr
   );
 }
 
-function ResourceCard({ resource, index }: { resource: Resource; index: number }) {
+function ResourceCard({ resource, index, locationLabel = 'Delhi NCR', onNavigate }: { resource: Resource; index: number; locationLabel?: string; onNavigate?: (dest: NavDestination) => void }) {
   const meta = TYPE_META[resource.type];
   const Icon = meta.icon;
   const status = STATUS_META[resource.status];
@@ -256,16 +260,40 @@ function ResourceCard({ resource, index }: { resource: Resource; index: number }
               <span className="flex items-center gap-0.5">
                 <MapPin className="h-3 w-3 text-info" /> {resource.distanceMiles}mi
               </span>
-              <span className="flex items-center gap-0.5">
-                <Phone className="h-3 w-3" /> {resource.phone}
-              </span>
+              <PhoneLink number={resource.phone} showIcon />
             </div>
-            <button
-              onClick={() => openGoogleMapsDirections(`${resource.name}, ${resource.address}`)}
-              className="flex items-center gap-1 rounded-lg border border-border bg-secondary/40 px-2 sm:px-2.5 py-1.5 text-[10px] sm:text-[11px] font-bold transition-all hover:bg-secondary active:scale-95"
-            >
-              <Navigation className="h-3 w-3 text-info" /> Directions
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => onNavigate?.({
+                  id: resource.id,
+                  name: resource.name,
+                  address: resource.address,
+                  coords: [resource.coords.y, resource.coords.x] as [number, number],
+                  phone: resource.phone,
+                  type: resource.type,
+                })}
+                className="flex items-center gap-1 rounded-lg border border-border bg-secondary/40 px-2 sm:px-2.5 py-1.5 text-[10px] sm:text-[11px] font-bold transition-all hover:bg-secondary active:scale-95"
+              >
+                <Navigation className="h-3 w-3 text-info" /> Directions
+              </button>
+              {(() => {
+                const url = buildGoogleMapsUrl({
+                  coords: [resource.coords.y, resource.coords.x] as [number, number],
+                  query: `${resource.name}, ${resource.address}`,
+                });
+                return url ? (
+                  <a
+                    href={url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 rounded-lg border border-border bg-secondary/40 px-2 sm:px-2.5 py-1.5 text-[10px] sm:text-[11px] font-bold transition-all hover:bg-secondary active:scale-95"
+                    title="Open in Google Maps"
+                  >
+                    <ExternalLink className="h-3 w-3 text-muted-foreground" /> Maps ↗
+                  </a>
+                ) : null;
+              })()}
+            </div>
           </div>
         </div>
       </div>

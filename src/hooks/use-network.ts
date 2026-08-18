@@ -13,6 +13,20 @@ export interface QueuedRequest {
   contact: string;
   coords: string;
   createdAt: number;
+  region?: string;
+  location?: string;
+  // Optional AI triage data — present when submitted via TriagePanel
+  triage?: {
+    priority:         'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
+    incidentType:     string;
+    people:           number | null;
+    vulnerable:       { elderly: number; children: number; pregnant: number; disabled: number; injured: number };
+    dangerIndicators: string[];
+    priorityReasons:  string[];
+    requiredResources:string[];
+    rawMessage:       string;
+    parsedBy:         'gemini' | 'fallback';
+  };
 }
 
 export function useNetwork() {
@@ -54,6 +68,10 @@ export function useOfflineQueue(isOnline: boolean) {
 
   const clearQueue = useCallback(() => setQueue([]), []);
 
+  const removeFromQueue = useCallback((id: string) => {
+    setQueue((q) => q.filter((item) => item.id !== id));
+  }, []);
+
   useEffect(() => {
     if (isOnline && queue.length > 0) {
       const t = setTimeout(() => {
@@ -63,7 +81,7 @@ export function useOfflineQueue(isOnline: boolean) {
     }
   }, [isOnline, queue.length]);
 
-  return { queue, enqueue, clearQueue, queueCount: queue.length };
+  return { queue, enqueue, clearQueue, removeFromQueue, queueCount: queue.length };
 }
 
 export function timeAgo(ts: number): string {

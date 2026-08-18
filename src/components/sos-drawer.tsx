@@ -42,6 +42,8 @@ interface SosDrawerProps {
   onOpenChange: (open: boolean) => void;
   isOnline: boolean;
   onEnqueue: (req: QueuedRequest) => void;
+  region?: string;
+  locationLabel?: string;
 }
 
 const CATEGORIES = [
@@ -52,7 +54,7 @@ const CATEGORIES = [
   { value: 'rescue', label: 'Rescue', icon: LifeBuoy },
 ];
 
-export function SosDrawer({ open, onOpenChange, isOnline, onEnqueue }: SosDrawerProps) {
+export function SosDrawer({ open, onOpenChange, isOnline, onEnqueue, region, locationLabel }: SosDrawerProps) {
   const [category, setCategory] = useState('');
   const [details, setDetails] = useState('');
   const [items, setItems] = useState('');
@@ -88,12 +90,27 @@ export function SosDrawer({ open, onOpenChange, isOnline, onEnqueue }: SosDrawer
 
   const handleLocate = () => {
     setLocating(true);
-    setTimeout(() => {
-      const lat = (Math.random() * 0.02 + 30.27).toFixed(5);
-      const lng = (Math.random() * 0.02 - 97.74).toFixed(5);
-      setCoords(`${lat}, ${lng}`);
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setCoords(`${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)}`);
+          setLocating(false);
+        },
+        () => {
+          // fallback: use region-approximate coords
+          const fallback = region === 'badrinath'
+            ? '30.55600, 79.56400'
+            : '28.61390, 77.20900';
+          setCoords(fallback);
+          setLocating(false);
+        },
+        { enableHighAccuracy: true, timeout: 8000 },
+      );
+    } else {
+      const fallback = region === 'badrinath' ? '30.55600, 79.56400' : '28.61390, 77.20900';
+      setCoords(fallback);
       setLocating(false);
-    }, 1200);
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -106,6 +123,8 @@ export function SosDrawer({ open, onOpenChange, isOnline, onEnqueue }: SosDrawer
       contact,
       coords,
       createdAt: Date.now(),
+      region:    region        || 'ncr',
+      location:  locationLabel || 'Delhi NCR',
     };
     onEnqueue(req);
     setSubmitted(true);
@@ -131,7 +150,9 @@ export function SosDrawer({ open, onOpenChange, isOnline, onEnqueue }: SosDrawer
             <div className="min-w-0">
               <SheetTitle className="text-base sm:text-lg font-bold">Request Aid (SOS)</SheetTitle>
               <SheetDescription className="text-xs truncate">
-                {isOnline ? 'Submitting live to response network' : 'Offline — will queue and sync automatically'}
+                {isOnline
+                  ? `Submitting live · ${locationLabel ?? 'Current region'}`
+                  : 'Offline — will queue and sync automatically'}
               </SheetDescription>
             </div>
           </div>

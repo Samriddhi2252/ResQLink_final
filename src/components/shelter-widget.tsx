@@ -1,4 +1,4 @@
-import { Home, Users, MapPin, Navigation, ChevronRight, X } from 'lucide-react';
+import { Home, Users, MapPin, Navigation, X, ExternalLink } from 'lucide-react';
 import {
   Sheet,
   SheetContent,
@@ -7,16 +7,19 @@ import {
   SheetDescription,
 } from '@/components/ui/sheet';
 import { Progress } from '@/components/ui/progress';
-import { cn, openGoogleMapsDirections } from '@/lib/utils';
+import { cn, buildGoogleMapsUrl } from '@/lib/utils';
 import type { Shelter } from '@/types';
+import type { NavDestination } from '@/hooks/use-navigation';
 
 interface ShelterWidgetProps {
   shelters: Shelter[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  locationLabel?: string;
+  onNavigate?: (dest: NavDestination) => void;
 }
 
-export function ShelterWidget({ shelters, open, onOpenChange }: ShelterWidgetProps) {
+export function ShelterWidget({ shelters, open, onOpenChange, locationLabel = 'Delhi NCR', onNavigate }: ShelterWidgetProps) {
   const totalCapacity = shelters.reduce((s, sh) => s + sh.capacity, 0);
   const totalOccupied = shelters.reduce((s, sh) => s + sh.occupied, 0);
   const overallPct = Math.round((totalOccupied / totalCapacity) * 100);
@@ -117,12 +120,37 @@ export function ShelterWidget({ shelters, open, onOpenChange }: ShelterWidgetPro
                   ))}
                 </div>
 
-                <button
-                  onClick={() => openGoogleMapsDirections(`${s.name}, ${s.address}, Delhi NCR`)}
-                  className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg border border-border bg-secondary/40 py-2 text-xs font-bold transition-colors hover:bg-secondary active:scale-[0.99]"
-                >
-                  <Navigation className="h-3.5 w-3.5 text-info" /> Get Directions
-                </button>
+                <div className="mt-3 flex gap-1.5">
+                  <button
+                    onClick={() => onNavigate?.({
+                      id: s.id,
+                      name: s.name,
+                      address: s.address,
+                      coords: [s.coords.y, s.coords.x] as [number, number],
+                      type: 'shelter',
+                    })}
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-border bg-secondary/40 py-2 text-xs font-bold transition-colors hover:bg-secondary active:scale-[0.99]"
+                  >
+                    <Navigation className="h-3.5 w-3.5 text-info" /> Get Directions
+                  </button>
+                  {(() => {
+                    const url = buildGoogleMapsUrl({
+                      coords: [s.coords.y, s.coords.x] as [number, number],
+                      query: `${s.name}, ${s.address}`,
+                    });
+                    return url ? (
+                      <a
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-center gap-1 rounded-lg border border-border bg-secondary/40 px-3 py-2 text-xs font-bold transition-colors hover:bg-secondary active:scale-[0.99]"
+                        title="Open in Google Maps"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" /> Maps ↗
+                      </a>
+                    ) : null;
+                  })()}
+                </div>
               </div>
             );
           })}

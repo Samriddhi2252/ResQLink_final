@@ -1,34 +1,66 @@
 import { useState } from 'react';
 import {
-  Search,
-  HeartPulse,
-  Droplets,
-  BedDouble,
-  Users,
-  LifeBuoy,
-  Navigation,
-  Clock,
-  MapPin,
-  PersonStanding,
-  CheckCircle2,
-  CloudOff,
-  Trash2,
-  RefreshCw,
+  Search, HeartPulse, Droplets, BedDouble, Users, LifeBuoy,
+  Navigation, Clock, MapPin, PersonStanding, CheckCircle2,
+  CloudOff, Trash2, RefreshCw, AlertTriangle, ChevronRight,
+  Brain, X, ShieldAlert, Users2, Flame, Mountain, Building2,
+  Phone, ExternalLink,
 } from 'lucide-react';
-import { cn, openGoogleMapsDirections } from '@/lib/utils';
+import { cn, buildGoogleMapsUrl } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { CATEGORY_META, PRIORITY_META } from '@/types';
 import type { AidRequest, RequestCategory, FilterCategory } from '@/types';
 import type { QueuedRequest } from '@/hooks/use-network';
 import { timeAgo } from '@/hooks/use-network';
+import type { NavDestination } from '@/hooks/use-navigation';
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Priority configuration (for AI triage priorities)
+// ─────────────────────────────────────────────────────────────────────────────
+type TriagePriority = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
+
+const TRIAGE_PRIORITY_META: Record<TriagePriority, {
+  label: string; bg: string; text: string; border: string; ring: string;
+}> = {
+  CRITICAL: { label: 'CRITICAL', bg: 'bg-alert/15',   text: 'text-alert',   border: 'border-alert/40',   ring: 'ring-alert/30' },
+  HIGH:     { label: 'HIGH',     bg: 'bg-warning/15',  text: 'text-warning', border: 'border-warning/40', ring: 'ring-warning/30' },
+  MEDIUM:   { label: 'MEDIUM',   bg: 'bg-info/15',     text: 'text-info',    border: 'border-info/40',    ring: 'ring-info/30' },
+  LOW:      { label: 'LOW',      bg: 'bg-success/15',  text: 'text-success', border: 'border-success/40', ring: 'ring-success/30' },
+};
+
+const PRIORITY_ORDER: Record<TriagePriority, number> = {
+  CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3,
+};
+
+const INCIDENT_ICON: Record<string, React.ReactNode> = {
+  Flood:               <Droplets   className="h-3.5 w-3.5" />,
+  Fire:                <Flame      className="h-3.5 w-3.5" />,
+  Earthquake:          <Building2  className="h-3.5 w-3.5" />,
+  Landslide:           <Mountain   className="h-3.5 w-3.5" />,
+  'Medical Emergency': <HeartPulse className="h-3.5 w-3.5" />,
+  Trapped:             <AlertTriangle className="h-3.5 w-3.5" />,
+  'Building Collapse': <Building2  className="h-3.5 w-3.5" />,
+  Unknown:             <AlertTriangle className="h-3.5 w-3.5" />,
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Props
+// ─────────────────────────────────────────────────────────────────────────────
 const ICON_MAP: Record<RequestCategory, typeof HeartPulse> = {
-  medical: HeartPulse,
-  food: Droplets,
-  shelter: BedDouble,
-  volunteers: Users,
-  rescue: LifeBuoy,
+  medical: HeartPulse, food: Droplets, shelter: BedDouble,
+  volunteers: Users, rescue: LifeBuoy,
 };
 
 interface LiveFeedProps {
@@ -38,31 +70,408 @@ interface LiveFeedProps {
   queue: QueuedRequest[];
   queueCount: number;
   onClearQueue: () => void;
+  onRemoveFromQueue: (id: string) => void;
   selectedId: string | null;
   onSelect: (id: string) => void;
+  locationLabel?: string;
+  onNavigate?: (dest: NavDestination) => void;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Triage detail modal
+// ─────────────────────────────────────────────────────────────────────────────
+function TriageDetailModal({
+  item,
+  onClose,
+  onNavigate,
+}: {
+  item: QueuedRequest;
+  onClose: () => void;
+  onNavigate?: (dest: NavDestination) => void;
+}) {
+  const t = item.triage;
+  const prioMeta = t ? TRIAGE_PRIORITY_META[t.priority] : null;
+
+  const vulnList: string[] = [];
+  if (t?.vulnerable) {
+    if (t.vulnerable.elderly  > 0) vulnList.push(`${t.vulnerable.elderly} Elderly`);
+    if (t.vulnerable.children > 0) vulnList.push(`${t.vulnerable.children} Children`);
+    if (t.vulnerable.pregnant > 0) vulnList.push('Pregnant person');
+    if (t.vulnerable.disabled > 0) vulnList.push('Person with disability');
+    if (t.vulnerable.injured  > 0) vulnList.push(`${t.vulnerable.injured} Injured`);
+  }
+
+  // Parse GPS coords string → [lat, lng] if available
+  const parsedCoords = ((): [number, number] | null => {
+    if (!item.coords) return null;
+    const parts = item.coords.split(',').map(s => parseFloat(s.trim()));
+    if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+      return [parts[0], parts[1]];
+    }
+    return null;
+  })();
+
+  const locationStr = item.location || null;
+  const hasLocation = !!(parsedCoords || locationStr);
+  const googleMapsUrl = buildGoogleMapsUrl({ coords: parsedCoords, query: locationStr });
+
+  const handleViewOnMap = () => {
+    if (!onNavigate) return;
+    onNavigate({
+      id: item.id,
+      name: item.triage?.incidentType ? `${item.triage.incidentType} Emergency` : 'Emergency',
+      address: item.location || 'Location unavailable',
+      coords: parsedCoords ?? [0, 0],
+      type: item.category,
+    });
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-2 sm:p-4">
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+
+      {/* Modal */}
+      <div className="relative z-10 w-full max-w-md max-h-[90dvh] overflow-y-auto
+        rounded-2xl border border-border bg-card shadow-2xl animate-float-up">
+
+        {/* Header */}
+        <div className="sticky top-0 z-10 flex items-center gap-2.5 border-b border-border
+          bg-card/95 px-4 py-3 backdrop-blur-md">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-alert/15">
+            <Brain className="h-4 w-4 text-alert" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-bold uppercase tracking-widest text-alert">AI Triage Analysis</p>
+            <p className="text-[10px] text-muted-foreground">{timeAgo(item.createdAt)} · {item.location || 'Location unknown'}</p>
+          </div>
+          <button onClick={onClose}
+            className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="p-4 space-y-4">
+
+          {/* Priority banner */}
+          {prioMeta ? (
+            <div className={cn('rounded-xl border p-3 flex items-center gap-3', prioMeta.bg, prioMeta.border)}>
+              <AlertTriangle className={cn('h-5 w-5 shrink-0', prioMeta.text)} />
+              <div>
+                <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">Priority</p>
+                <p className={cn('text-xl font-extrabold leading-tight', prioMeta.text)}>{t!.priority}</p>
+              </div>
+              <div className="ml-auto text-right">
+                <p className="text-[9px] text-muted-foreground">Parsed by</p>
+                <p className="text-[10px] font-semibold text-foreground capitalize">
+                  {t!.parsedBy === 'gemini' ? '✦ Gemini AI' : '⚡ Offline'}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-border bg-secondary/30 p-3 text-xs text-muted-foreground">
+              AI Triage: Not available for this request
+            </div>
+          )}
+
+          {t && (
+            <>
+              {/* Incident details grid */}
+              <div className="grid grid-cols-2 gap-3">
+                <DetailBlock label="Incident Type">
+                  <div className="flex items-center gap-1.5 text-sm font-bold">
+                    <span className="text-alert">{INCIDENT_ICON[t.incidentType]}</span>
+                    {t.incidentType}
+                  </div>
+                </DetailBlock>
+                <DetailBlock label="Location">
+                  {hasLocation ? (
+                    <div className="space-y-1.5">
+                      <p className="text-sm font-bold">{item.location || 'See coordinates'}</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {onNavigate && (
+                          <button
+                            onClick={handleViewOnMap}
+                            className="flex items-center gap-1 rounded-md border border-info/30 bg-info/10
+                              px-2 py-1 text-[10px] font-semibold text-info hover:bg-info/20 transition-colors"
+                          >
+                            <MapPin className="h-3 w-3" /> View on Map
+                          </button>
+                        )}
+                        {googleMapsUrl && (
+                          <a
+                            href={googleMapsUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 rounded-md border border-border bg-secondary/40
+                              px-2 py-1 text-[10px] font-semibold text-foreground hover:bg-secondary transition-colors"
+                          >
+                            <ExternalLink className="h-3 w-3" /> Google Maps ↗
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">Location unavailable</p>
+                  )}
+                </DetailBlock>
+                <DetailBlock label="People Affected">
+                  <p className="text-sm font-bold">{t.people !== null ? `${t.people} people` : 'Unknown'}</p>
+                </DetailBlock>
+                <DetailBlock label="Vulnerable People">
+                  {vulnList.length > 0 ? (
+                    <div className="flex flex-wrap gap-1">
+                      {vulnList.map((v, i) => (
+                        <span key={i} className="rounded-md border border-warning/25 bg-warning/10
+                          px-1.5 py-0.5 text-[10px] font-semibold text-warning">{v}</span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">None reported</p>
+                  )}
+                </DetailBlock>
+              </div>
+
+              {/* Danger indicators */}
+              {t.dangerIndicators.length > 0 && (
+                <DetailBlock label="Danger Details">
+                  <div className="flex flex-wrap gap-1">
+                    {t.dangerIndicators.map((d, i) => (
+                      <span key={i} className="flex items-center gap-1 rounded-md border border-alert/20
+                        bg-alert/10 px-2 py-0.5 text-[10px] font-medium text-alert">
+                        <AlertTriangle className="h-2.5 w-2.5 shrink-0" /> {d}
+                      </span>
+                    ))}
+                  </div>
+                </DetailBlock>
+              )}
+
+              {/* Priority reasons */}
+              {t.priorityReasons.length > 0 && (
+                <DetailBlock label="AI Priority Reasons">
+                  <ul className="space-y-1">
+                    {t.priorityReasons.map((r, i) => (
+                      <li key={i} className="flex items-start gap-1.5 text-xs">
+                        <ChevronRight className={cn('h-3.5 w-3.5 mt-0.5 shrink-0',
+                          prioMeta?.text ?? 'text-muted-foreground')} />
+                        {r}
+                      </li>
+                    ))}
+                  </ul>
+                </DetailBlock>
+              )}
+
+              {/* Required resources */}
+              {t.requiredResources.length > 0 && (
+                <DetailBlock label="Required Resources">
+                  <div className="flex flex-wrap gap-1.5">
+                    {t.requiredResources.map((r, i) => (
+                      <span key={i} className="flex items-center gap-1 rounded-md border border-info/25
+                        bg-info/10 px-2 py-1 text-[10px] font-bold text-info">
+                        <CheckCircle2 className="h-2.5 w-2.5" /> {r}
+                      </span>
+                    ))}
+                  </div>
+                </DetailBlock>
+              )}
+            </>
+          )}
+
+          {/* Contact info */}
+          {item.contact && (
+            <DetailBlock label="Contact">
+              <div className="flex items-center gap-1.5 text-xs font-medium">
+                <Phone className="h-3.5 w-3.5 text-info" />
+                <a href={`tel:${item.contact.replace(/[\s\-().]/g,'')}`}
+                  className="text-info hover:underline">{item.contact}</a>
+              </div>
+            </DetailBlock>
+          )}
+
+          {/* GPS coords */}
+          {item.coords && (
+            <DetailBlock label="GPS Coordinates">
+              <p className="font-mono text-xs text-foreground">{item.coords}</p>
+            </DetailBlock>
+          )}
+
+          {/* Original message */}
+          <DetailBlock label="Original User Message">
+            <blockquote className="border-l-2 border-alert/40 pl-3 text-xs italic text-muted-foreground leading-relaxed">
+              "{t?.rawMessage || item.details}"
+            </blockquote>
+          </DetailBlock>
+
+          {/* Region tag */}
+          <div className="flex items-center gap-2 pt-1">
+            <span className="rounded-full border border-border bg-secondary/40 px-2.5 py-1 text-[10px] font-medium text-muted-foreground">
+              📍 {item.location || 'Region unknown'}
+            </span>
+            <span className="rounded-full border border-border bg-secondary/40 px-2.5 py-1 text-[10px] font-medium text-muted-foreground">
+              🕐 {timeAgo(item.createdAt)}
+            </span>
+          </div>
+
+          <p className="text-center text-[10px] text-muted-foreground/60 pt-1">
+            ⚠ AI-assisted triage · Verify with responders on ground · Call <strong>112</strong> for life-threatening emergencies
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DetailBlock({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">{label}</p>
+      {children}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Queue item row — compact responder card
+// ─────────────────────────────────────────────────────────────────────────────
+function QueueItem({
+  item,
+  onViewDetails,
+  onResolve,
+}: {
+  item: QueuedRequest;
+  onViewDetails: () => void;
+  onResolve: (id: string) => void;
+}) {
+  const t = item.triage;
+  const prioMeta = t ? TRIAGE_PRIORITY_META[t.priority] : null;
+
+  return (
+    <div className="space-y-1">
+      {/* Main clickable card — no nested buttons */}
+      <button
+        type="button"
+        onClick={onViewDetails}
+        className={cn(
+          'w-full text-left rounded-xl border p-2.5 transition-all hover:shadow-md active:scale-[0.99]',
+          prioMeta
+            ? cn(prioMeta.bg, prioMeta.border, 'hover:opacity-90')
+            : 'bg-card border-border hover:bg-secondary/40',
+        )}
+      >
+        <div className="flex items-start gap-2.5">
+          {/* Priority badge */}
+          <div className="flex flex-col items-center gap-1 shrink-0 mt-0.5">
+            {prioMeta ? (
+              <span className={cn(
+                'rounded-md px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider border',
+                prioMeta.bg, prioMeta.text, prioMeta.border,
+              )}>
+                {t!.priority === 'CRITICAL' ? '🚨 ' : t!.priority === 'HIGH' ? '🟠 ' : t!.priority === 'MEDIUM' ? '🟡 ' : '🟢 '}
+                {t!.priority}
+              </span>
+            ) : (
+              <AlertTriangle className="h-4 w-4 text-warning mt-0.5" />
+            )}
+          </div>
+
+          <div className="min-w-0 flex-1">
+            {/* Incident type + people */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {t && (
+                <span className="flex items-center gap-1 text-[11px] font-bold text-foreground">
+                  <span className="text-alert">{INCIDENT_ICON[t.incidentType]}</span>
+                  {t.incidentType}
+                </span>
+              )}
+              {t?.people != null && (
+                <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
+                  <Users2 className="h-2.5 w-2.5" /> {t.people} people
+                </span>
+              )}
+            </div>
+
+            {/* Location */}
+            <p className="mt-0.5 text-[10px] text-muted-foreground truncate">
+              <MapPin className="inline h-2.5 w-2.5 mr-0.5" />
+              {item.location || item.details?.slice(0, 40) || item.category}
+            </p>
+
+            {/* Vulnerable summary */}
+            {t && Object.values(t.vulnerable).some(v => v > 0) && (
+              <div className="mt-1 flex flex-wrap gap-1">
+                {t.vulnerable.elderly  > 0 && <span className="text-[9px] font-semibold text-warning bg-warning/10 border border-warning/20 rounded px-1 py-0.5">{t.vulnerable.elderly} Elderly</span>}
+                {t.vulnerable.children > 0 && <span className="text-[9px] font-semibold text-info bg-info/10 border border-info/20 rounded px-1 py-0.5">{t.vulnerable.children} Children</span>}
+                {t.vulnerable.pregnant > 0 && <span className="text-[9px] font-semibold text-info bg-info/10 border border-info/20 rounded px-1 py-0.5">Pregnant</span>}
+                {t.vulnerable.injured  > 0 && <span className="text-[9px] font-semibold text-alert bg-alert/10 border border-alert/20 rounded px-1 py-0.5">{t.vulnerable.injured} Injured</span>}
+              </div>
+            )}
+          </div>
+
+          {/* Timestamp + chevron */}
+          <div className="shrink-0 flex flex-col items-end gap-1">
+            <span className="text-[9px] text-muted-foreground">{timeAgo(item.createdAt)}</span>
+            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+          </div>
+        </div>
+      </button>
+
+      {/* Resolve button — sibling to the card, NOT nested inside it */}
+      <AlertDialog>
+        <AlertDialogTrigger asChild>
+          <button
+            type="button"
+            className="w-full rounded-lg border border-border bg-secondary/20 py-1 text-[10px]
+              font-semibold text-muted-foreground hover:bg-success/10 hover:border-success/30
+              hover:text-success transition-colors"
+          >
+            ✓ Mark Resolved
+          </button>
+        </AlertDialogTrigger>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Mark this emergency as resolved?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This emergency will be removed from the active response queue permanently.
+              {t && (
+                <span className="block mt-2 font-medium text-foreground">
+                  {t.incidentType} · {t.priority} · {item.location || 'Unknown location'}
+                </span>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => onResolve(item.id)}
+              className="bg-success text-white hover:bg-success/90"
+            >
+              Mark Resolved
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LiveFeed
+// ─────────────────────────────────────────────────────────────────────────────
 export function LiveFeed({
-  requests,
-  filter,
-  isOnline,
-  queue,
-  queueCount,
-  onClearQueue,
-  selectedId,
-  onSelect,
+  requests, filter, isOnline, queue, queueCount, onClearQueue, onRemoveFromQueue,
+  selectedId, onSelect, locationLabel = 'Delhi NCR', onNavigate,
 }: LiveFeedProps) {
-  const [search, setSearch] = useState('');
+  const [search, setSearch]           = useState('');
+  const [selectedQueue, setSelectedQueue] = useState<QueuedRequest | null>(null);
 
   const filtered = requests.filter((r) => {
     if (filter !== 'all' && r.category !== filter) return false;
     if (search) {
       const q = search.toLowerCase();
-      return (
-        r.title.toLowerCase().includes(q) ||
-        r.details.toLowerCase().includes(q) ||
-        r.items.some((i) => i.toLowerCase().includes(q))
-      );
+      return r.title.toLowerCase().includes(q) ||
+             r.details.toLowerCase().includes(q) ||
+             r.items.some((i) => i.toLowerCase().includes(q));
     }
     return true;
   });
@@ -73,101 +482,138 @@ export function LiveFeed({
     return a.distanceMiles - b.distanceMiles;
   });
 
+  // Sort queue by triage priority, then by timestamp descending
+  const sortedQueue = [...queue].sort((a, b) => {
+    const pa = a.triage?.priority;
+    const pb = b.triage?.priority;
+    if (pa && pb) {
+      const diff = PRIORITY_ORDER[pa] - PRIORITY_ORDER[pb];
+      if (diff !== 0) return diff;
+    } else if (pa) return -1;
+    else if (pb)    return 1;
+    return b.createdAt - a.createdAt;
+  });
+
   return (
-    <div className="flex h-full flex-col">
-      {/* Search bar */}
-      <div className="border-b border-border p-3">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search requests, items, or keywords..."
-            className="border-border bg-secondary/30 pl-9"
-          />
+    <>
+      <div className="flex h-full flex-col">
+
+        {/* Search bar */}
+        <div className="border-b border-border p-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search requests, items, or keywords..."
+              className="border-border bg-secondary/30 pl-9"
+            />
+          </div>
+          <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
+            <span className="flex items-center gap-1">
+              <MapPin className="h-3 w-3 text-info" /> Within 2-mile radius
+            </span>
+            <span className="font-semibold text-foreground">{sorted.length} requests</span>
+          </div>
         </div>
-        <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
-          <span className="flex items-center gap-1">
-            <MapPin className="h-3 w-3 text-info" /> Within 2-mile radius
-          </span>
-          <span className="font-semibold text-foreground">{sorted.length} requests</span>
-        </div>
+
+        {/* ── Emergency Queue (responder dashboard) ── */}
+        {queueCount > 0 && (
+          <div className="border-b border-border bg-alert/[0.04] px-3 py-3">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <span className="relative flex h-5 w-5 items-center justify-center rounded-full bg-alert/20">
+                  {isOnline
+                    ? <RefreshCw className="h-3 w-3 animate-spin text-success" />
+                    : <CloudOff className="h-3 w-3 text-warning" />
+                  }
+                </span>
+                <div>
+                  <p className="text-xs font-bold text-alert flex items-center gap-1">
+                    <AlertTriangle className="h-3 w-3" />
+                    Emergency Queue · {queueCount} active
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {isOnline ? 'Syncing to response network…' : 'Offline — will sync when connected'}
+                    {' · Click any item for full triage details'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={onClearQueue}
+                className="flex items-center gap-1 rounded-md border border-border px-2 py-1
+                  text-[10px] font-medium text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+              >
+                <Trash2 className="h-3 w-3" /> Clear
+              </button>
+            </div>
+
+            {/* Priority-sorted queue items */}
+            <div className="space-y-1.5">
+              {sortedQueue.map((q) => (
+                <QueueItem
+                  key={q.id}
+                  item={q}
+                  onViewDetails={() => setSelectedQueue(q)}
+                  onResolve={onRemoveFromQueue}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Feed list */}
+        <ScrollArea className="flex-1">
+          <div className="space-y-2.5 p-3">
+            {sorted.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <CheckCircle2 className="h-10 w-10 text-success/40" />
+                <p className="mt-3 text-sm font-medium text-muted-foreground">No matching requests</p>
+                <p className="text-xs text-muted-foreground/70">Try a different filter or search term</p>
+              </div>
+            ) : (
+              sorted.map((r, i) => (
+                <RequestCard
+                  key={r.id}
+                  request={r}
+                  selected={selectedId === r.id}
+                  onSelect={() => onSelect(r.id)}
+                  index={i}
+                  locationLabel={locationLabel}
+                  onNavigate={onNavigate}
+                />
+              ))
+            )}
+          </div>
+        </ScrollArea>
       </div>
 
-      {/* Offline queue banner */}
-      {queueCount > 0 && (
-        <div className="border-b border-border bg-warning/[0.06] px-3 py-2.5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="relative flex h-5 w-5 items-center justify-center rounded-full bg-warning/20">
-                <CloudOff className="h-3 w-3 text-warning" />
-              </span>
-              <div>
-                <p className="text-xs font-bold text-warning">
-                  Offline Queue · {queueCount} pending
-                </p>
-                <p className="text-[10px] text-muted-foreground">
-                  {isOnline ? 'Syncing to server...' : 'Will auto-sync when online'}
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={onClearQueue}
-              className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-            >
-              <Trash2 className="h-3 w-3" /> Clear
-            </button>
-          </div>
-          <div className="mt-2 space-y-1">
-            {queue.map((q) => (
-              <div key={q.id} className="flex items-center gap-2 rounded-md bg-card/60 px-2 py-1.5 text-[11px]">
-                {isOnline ? (
-                  <RefreshCw className="h-3 w-3 animate-spin text-success" />
-                ) : (
-                  <Clock className="h-3 w-3 text-warning" />
-                )}
-                <span className="flex-1 truncate font-medium">{q.details || q.category}</span>
-                <span className="text-muted-foreground">{timeAgo(q.createdAt)}</span>
-              </div>
-            ))}
-          </div>
-        </div>
+      {/* Triage detail modal */}
+      {selectedQueue && (
+        <TriageDetailModal
+          item={selectedQueue}
+          onClose={() => setSelectedQueue(null)}
+          onNavigate={onNavigate}
+        />
       )}
-
-      {/* Feed list */}
-      <ScrollArea className="flex-1">
-        <div className="space-y-2.5 p-3">
-          {sorted.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <CheckCircle2 className="h-10 w-10 text-success/40" />
-              <p className="mt-3 text-sm font-medium text-muted-foreground">No matching requests</p>
-              <p className="text-xs text-muted-foreground/70">Try a different filter or search term</p>
-            </div>
-          ) : (
-            sorted.map((r, i) => (
-              <RequestCard
-                key={r.id}
-                request={r}
-                selected={selectedId === r.id}
-                onSelect={() => onSelect(r.id)}
-                index={i}
-              />
-            ))
-          )}
-        </div>
-      </ScrollArea>
-    </div>
+    </>
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// RequestCard (existing mock AidRequest cards — unchanged)
+// ─────────────────────────────────────────────────────────────────────────────
 interface RequestCardProps {
   request: AidRequest;
   selected: boolean;
   onSelect: () => void;
   index: number;
+  locationLabel?: string;
+  onNavigate?: (dest: NavDestination) => void;
 }
 
-function RequestCard({ request, selected, onSelect, index }: RequestCardProps) {
+function RequestCard({ request, selected, onSelect, index, locationLabel = 'Delhi NCR', onNavigate }: RequestCardProps) {
   const meta = CATEGORY_META[request.category];
   const Icon = ICON_MAP[request.category];
   const prio = PRIORITY_META[request.priority];
@@ -205,11 +651,9 @@ function RequestCard({ request, selected, onSelect, index }: RequestCardProps) {
         </span>
       </div>
 
-      {/* Title + details */}
       <h3 className="mt-2 text-sm font-bold leading-snug break-words">{request.title}</h3>
       <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground break-words">{request.details}</p>
 
-      {/* Items */}
       {request.items.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1">
           {request.items.map((item, i) => (
@@ -220,7 +664,6 @@ function RequestCard({ request, selected, onSelect, index }: RequestCardProps) {
         </div>
       )}
 
-      {/* Footer: distance + people + CTA */}
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-2.5">
         <div className="flex items-center gap-2.5 sm:gap-3 text-[11px] text-muted-foreground">
           <span className="flex items-center gap-0.5">
@@ -239,7 +682,16 @@ function RequestCard({ request, selected, onSelect, index }: RequestCardProps) {
           <button
             onClick={(e) => {
               e.stopPropagation();
-              openGoogleMapsDirections(`${request.title}, Delhi NCR`);
+              if (onNavigate) {
+                onNavigate({
+                  id: request.id,
+                  name: request.title,
+                  address: locationLabel,
+                  coords: [0, 0],
+                  type: request.category,
+                });
+              }
+              onSelect();
             }}
             className="flex items-center gap-1 rounded-lg border border-border bg-secondary/40 px-2 sm:px-2.5 py-1.5 text-[10px] sm:text-[11px] font-bold transition-all hover:bg-secondary active:scale-95"
           >

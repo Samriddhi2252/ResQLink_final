@@ -5,7 +5,7 @@ import {
   Search, X, Navigation, Crosshair, MapPin, ShieldCheck,
   TriangleAlert, HeartPulse, Droplets, BedDouble, Users,
   LifeBuoy, Radio, Layers, Wifi, WifiOff, Hospital, Tent,
-  Locate, ChevronDown, Map,
+  Locate, ChevronDown, Map, Phone, Clock,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { CATEGORY_META } from '@/types';
@@ -28,6 +28,7 @@ import {
 } from '@/data/delhi-ncr-map-data';
 
 import type { EmergencyLocation, SearchEntry } from '@/data/joshimath-map-data';
+import type { NavDestination } from '@/hooks/use-navigation';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Leaflet default-icon fix (bundler strips the URLs)
@@ -96,14 +97,39 @@ const ICONS = {
 // ─────────────────────────────────────────────────────────────────────────────
 // Design tokens
 // ─────────────────────────────────────────────────────────────────────────────
-const C = {
+// ─────────────────────────────────────────────────────────────────────────────
+// Design tokens — dark (default) and light variants
+// ─────────────────────────────────────────────────────────────────────────────
+const DARK = {
   highway:'#c8d4e8', majorRoad:'#8fa3bc', minorRoad:'#5c7080',
-  river:'#38bdf8', stream:'#7dd3fc',
+  highwayCasing: '#0f2a3d',
+  river:'#38bdf8', stream:'#7dd3fc', riverGlow:'#0369a1',
   slideCrit:'#f97316', slideHigh:'#fb923c', slideMod:'#fbbf24',
   floodCrit:'#1d4ed8', floodHigh:'#2563eb', floodMod:'#3b82f6',
   safe:'#16a34a',
   bgDeep:'#0c1827', bgMid:'#122033', bgHill:'#1a2d40',
+  labelBg:'rgba(10,22,36,0.82)',      labelBorder:'rgba(59,130,246,0.4)',
+  labelColor:'#f1f5f9',               labelSub:'#64a8cc',
+  roadBadgeBg:'rgba(12,42,62,0.92)',  roadBadgeBorder:'rgba(200,212,232,0.5)',
+  roadBadgeColor:'#c8d4e8',
 };
+
+const LIGHT = {
+  highway:'#1e3a5f', majorRoad:'#374e6a', minorRoad:'#5a6e82',
+  highwayCasing: '#ffffff',
+  river:'#0369a1', stream:'#0284c7', riverGlow:'#bae6fd',
+  slideCrit:'#c2410c', slideHigh:'#ea580c', slideMod:'#d97706',
+  floodCrit:'#1e40af', floodHigh:'#1d4ed8', floodMod:'#2563eb',
+  safe:'#15803d',
+  bgDeep:'#c8dce8', bgMid:'#d4e6f0', bgHill:'#bdd0dc',
+  labelBg:'rgba(255,255,255,0.93)',   labelBorder:'rgba(30,58,95,0.35)',
+  labelColor:'#0f172a',               labelSub:'#1e3a5f',
+  roadBadgeBg:'rgba(255,255,255,0.96)', roadBadgeBorder:'rgba(30,58,95,0.40)',
+  roadBadgeColor:'#1e3a5f',
+};
+
+// kept for backward-compat with any inline references
+const C = DARK;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Layer visibility — shared across both regions
@@ -133,6 +159,8 @@ interface MapViewProps {
   selectedId: string | null;
   onSelect: (id: string) => void;
   region: MapRegion;
+  theme?: 'dark' | 'light';
+  navDestination?: NavDestination | null;
 }
 
 const REQ_ICON_MAP: Record<RequestCategory, typeof HeartPulse> = {
@@ -174,7 +202,9 @@ function buildPopupHtml(loc: EmergencyLocation): string {
       ${bar}${chips}
       <div style="margin-top:10px;padding-top:8px;border-top:1px solid #1e3a52;
         display:flex;align-items:center;gap:6px;font-size:11px;color:#5d8aaa">
-        <span>📞</span><span style="color:#93c5fd">${loc.phone}</span>
+        <span>📞</span>
+        <a href="tel:${loc.phone.replace(/[\s\-().]/g,'')}" style="color:#38bdf8;text-decoration:none"
+           onclick="event.stopPropagation()">${loc.phone}</a>
       </div>
     </div>`;
 }
@@ -188,6 +218,7 @@ function buildRoadsGroup(
   map: L.Map,
   geojson: GeoJSON.FeatureCollection,
   pane: string,
+  P = DARK,
 ): L.LayerGroup {
   const group = L.layerGroup();
   geojson.features.forEach(f => {
@@ -196,24 +227,24 @@ function buildRoadsGroup(
     const isSec = p.width === 'secondary';
     if (isHwy) {
       L.geoJSON(f as GeoJSON.Feature, {
-        pane, style:{ color:'#0f2a3d', weight:7, opacity:0.9, lineCap:'round', lineJoin:'round' },
+        pane, style:{ color: P.highwayCasing, weight:7, opacity:0.9, lineCap:'round', lineJoin:'round' },
       }).addTo(group);
       L.geoJSON(f as GeoJSON.Feature, {
-        pane, style:{ color:C.highway, weight:4, opacity:1, lineCap:'round', lineJoin:'round' },
+        pane, style:{ color: P.highway, weight:4, opacity:1, lineCap:'round', lineJoin:'round' },
       })
       .bindTooltip(`<div class="tt-row"><span class="tt-hwy">HWY</span>${p.name}</div>`,
         { sticky:true, className:'map-tt', direction:'top' })
       .addTo(group);
     } else if (isSec) {
       L.geoJSON(f as GeoJSON.Feature, {
-        pane, style:{ color:C.majorRoad, weight:2.5, opacity:0.85, lineCap:'round', lineJoin:'round' },
+        pane, style:{ color: P.majorRoad, weight:2.5, opacity:0.9, lineCap:'round', lineJoin:'round' },
       })
       .bindTooltip(`<div class="tt-row">${p.name}</div>`,
         { sticky:true, className:'map-tt', direction:'top' })
       .addTo(group);
     } else {
       L.geoJSON(f as GeoJSON.Feature, {
-        pane, style:{ color:C.minorRoad, weight:1.5, opacity:0.7, dashArray:'5 4',
+        pane, style:{ color: P.minorRoad, weight:1.5, opacity:0.75, dashArray:'5 4',
                      lineCap:'round', lineJoin:'round' },
       })
       .bindTooltip(`<div class="tt-row">${p.name}</div>`,
@@ -229,6 +260,7 @@ function buildRiversGroup(
   map: L.Map,
   geojson: GeoJSON.FeatureCollection,
   pane: string,
+  P = DARK,
 ): L.LayerGroup {
   const group = L.layerGroup();
   geojson.features.forEach(f => {
@@ -236,18 +268,18 @@ function buildRiversGroup(
     const isStream = p.type === 'stream' || p.type === 'wetland';
     if (!isStream) {
       L.geoJSON(f as GeoJSON.Feature, {
-        pane, style:{ color:'#0369a1', weight:6, opacity:0.3, lineCap:'round' },
+        pane, style:{ color: P.riverGlow, weight:6, opacity:0.35, lineCap:'round' },
       }).addTo(group);
     }
     L.geoJSON(f as GeoJSON.Feature, {
       pane, style:{
-        color: isStream ? C.stream : C.river,
-        weight: isStream ? 1.5 : 3, opacity: isStream ? 0.7 : 0.95,
+        color: isStream ? P.stream : P.river,
+        weight: isStream ? 1.5 : 3, opacity: isStream ? 0.8 : 1,
         dashArray: isStream ? '4 4' : undefined, lineCap:'round',
       },
     })
     .bindTooltip(
-      `<div class="tt-row"><span class="tt-dot" style="background:#38bdf8"></span>${p.name}</div>`,
+      `<div class="tt-row"><span class="tt-dot" style="background:${P.river}"></span>${p.name}</div>`,
       { sticky:true, className:'map-tt', direction:'top' },
     )
     .addTo(group);
@@ -260,13 +292,14 @@ function buildFloodGroup(
   map: L.Map,
   geojson: GeoJSON.FeatureCollection,
   pane: string,
+  P = DARK,
 ): L.LayerGroup {
   const group = L.layerGroup();
   geojson.features.forEach(f => {
     const p = f.properties as { name:string; severity:string; description:string };
-    const col = p.severity==='critical'?C.floodCrit : p.severity==='high'?C.floodHigh : C.floodMod;
+    const col = p.severity==='critical'? P.floodCrit : p.severity==='high'? P.floodHigh : P.floodMod;
     L.geoJSON(f as GeoJSON.Feature, {
-      pane, style:{ color:col, fillColor:col, fillOpacity:0.18, weight:1.5, opacity:0.65, dashArray:'8 5' },
+      pane, style:{ color:col, fillColor:col, fillOpacity:0.22, weight:2, opacity:0.8, dashArray:'8 5' },
     })
     .bindTooltip(
       `<div class="tt-row"><span class="tt-dot" style="background:${col}"></span>
@@ -284,41 +317,65 @@ function buildPlaceLabels(
   map: L.Map,
   labels: import('@/data/joshimath-map-data').PlaceLabel[],
   pane: string,
+  P = DARK,
 ): L.LayerGroup {
   const group = L.layerGroup();
   type LS = { fontSize:number; fontWeight:string; color:string; subColor:string; subSize:number;
                bg:string; border:string; radius:number; px:number; py:number;
                shadowBlur:number; shadowColor:string; letterSpacing:string;
                iconChar?:string; iconColor?:string; };
+
+  // Shared shadow depends on theme
+  const sh = P === LIGHT ? 'rgba(0,0,0,0.18)' : 'rgba(0,0,0,0.75)';
+
   const TS: Record<string,LS> = {
-    city:      { fontSize:14, fontWeight:'800', color:'#f1f5f9', subColor:'#64a8cc', subSize:9.5,
-                 bg:'rgba(10,22,36,0.82)', border:'1px solid rgba(59,130,246,0.4)',
-                 radius:6, px:7, py:3, shadowBlur:12, shadowColor:'rgba(0,0,0,0.8)', letterSpacing:'0.02em' },
-    town:      { fontSize:11.5, fontWeight:'700', color:'#e2e8f0', subColor:'#5d8aaa', subSize:9,
-                 bg:'rgba(10,22,36,0.75)', border:'1px solid rgba(45,95,130,0.35)',
-                 radius:5, px:6, py:2.5, shadowBlur:8, shadowColor:'rgba(0,0,0,0.7)', letterSpacing:'0.01em' },
-    village:   { fontSize:10, fontWeight:'600', color:'#cbd5e1', subColor:'#4a6a82', subSize:8.5,
-                 bg:'rgba(10,22,36,0.65)', border:'1px solid rgba(35,70,100,0.3)',
-                 radius:4, px:5, py:2, shadowBlur:6, shadowColor:'rgba(0,0,0,0.6)', letterSpacing:'0em' },
-    locality:  { fontSize:9.5, fontWeight:'600', color:'#94a3b8', subColor:'#3a5a72', subSize:8,
-                 bg:'rgba(10,22,36,0.60)', border:'1px solid rgba(30,58,82,0.25)',
-                 radius:4, px:5, py:2, shadowBlur:4, shadowColor:'rgba(0,0,0,0.5)', letterSpacing:'0em' },
-    landmark:  { fontSize:10, fontWeight:'600', color:'#fbbf24', subColor:'#78716c', subSize:8.5,
-                 bg:'rgba(10,18,28,0.72)', border:'1px solid rgba(251,191,36,0.25)',
-                 radius:4, px:5, py:2, shadowBlur:6, shadowColor:'rgba(0,0,0,0.6)', letterSpacing:'0em',
-                 iconChar:'◆', iconColor:'#fbbf24' },
-    confluence:{ fontSize:10, fontWeight:'700', color:'#38bdf8', subColor:'#0e4a6a', subSize:8.5,
-                 bg:'rgba(7,18,28,0.72)', border:'1px solid rgba(56,189,248,0.3)',
-                 radius:4, px:5, py:2, shadowBlur:6, shadowColor:'rgba(0,0,0,0.6)', letterSpacing:'0em',
-                 iconChar:'~', iconColor:'#38bdf8' },
-    pass:      { fontSize:10, fontWeight:'600', color:'#a3b4c2', subColor:'#4a6070', subSize:8.5,
-                 bg:'rgba(10,20,30,0.65)', border:'1px solid rgba(80,110,140,0.25)',
-                 radius:4, px:5, py:2, shadowBlur:5, shadowColor:'rgba(0,0,0,0.55)', letterSpacing:'0.02em',
-                 iconChar:'▲', iconColor:'#a3b4c2' },
-    glacier:   { fontSize:10, fontWeight:'600', color:'#bae6fd', subColor:'#1a4a60', subSize:8.5,
-                 bg:'rgba(8,18,28,0.70)', border:'1px solid rgba(186,230,253,0.25)',
-                 radius:4, px:5, py:2, shadowBlur:5, shadowColor:'rgba(0,0,0,0.55)', letterSpacing:'0em',
-                 iconChar:'❄', iconColor:'#bae6fd' },
+    city:      { fontSize:14, fontWeight:'800', color: P.labelColor,   subColor: P.labelSub, subSize:9.5,
+                 bg: P.labelBg, border:`1px solid ${P.labelBorder}`,
+                 radius:6, px:7, py:3, shadowBlur:10, shadowColor:sh, letterSpacing:'0.02em' },
+    town:      { fontSize:11.5, fontWeight:'700', color: P.labelColor, subColor: P.labelSub, subSize:9,
+                 bg: P === LIGHT ? 'rgba(255,255,255,0.88)' : 'rgba(10,22,36,0.75)',
+                 border:`1px solid ${P.labelBorder}`,
+                 radius:5, px:6, py:2.5, shadowBlur:7, shadowColor:sh, letterSpacing:'0.01em' },
+    village:   { fontSize:10, fontWeight:'600',
+                 color: P === LIGHT ? '#1e3a5f' : '#cbd5e1',
+                 subColor: P === LIGHT ? '#374e6a' : '#4a6a82', subSize:8.5,
+                 bg: P === LIGHT ? 'rgba(255,255,255,0.82)' : 'rgba(10,22,36,0.65)',
+                 border: P === LIGHT ? '1px solid rgba(30,58,95,0.25)' : '1px solid rgba(35,70,100,0.3)',
+                 radius:4, px:5, py:2, shadowBlur:5, shadowColor:sh, letterSpacing:'0em' },
+    locality:  { fontSize:9.5, fontWeight:'600',
+                 color: P === LIGHT ? '#374e6a' : '#94a3b8',
+                 subColor: P === LIGHT ? '#4a5e72' : '#3a5a72', subSize:8,
+                 bg: P === LIGHT ? 'rgba(255,255,255,0.78)' : 'rgba(10,22,36,0.60)',
+                 border: P === LIGHT ? '1px solid rgba(30,58,95,0.20)' : '1px solid rgba(30,58,82,0.25)',
+                 radius:4, px:5, py:2, shadowBlur:4, shadowColor:sh, letterSpacing:'0em' },
+    landmark:  { fontSize:10, fontWeight:'600',
+                 color: P === LIGHT ? '#92400e' : '#fbbf24',
+                 subColor: P === LIGHT ? '#78716c' : '#78716c', subSize:8.5,
+                 bg: P === LIGHT ? 'rgba(255,251,235,0.92)' : 'rgba(10,18,28,0.72)',
+                 border: P === LIGHT ? '1px solid rgba(146,64,14,0.30)' : '1px solid rgba(251,191,36,0.25)',
+                 radius:4, px:5, py:2, shadowBlur:5, shadowColor:sh, letterSpacing:'0em',
+                 iconChar:'◆', iconColor: P === LIGHT ? '#b45309' : '#fbbf24' },
+    confluence:{ fontSize:10, fontWeight:'700',
+                 color: P === LIGHT ? '#0369a1' : '#38bdf8',
+                 subColor: P === LIGHT ? '#0369a1' : '#0e4a6a', subSize:8.5,
+                 bg: P === LIGHT ? 'rgba(239,248,255,0.92)' : 'rgba(7,18,28,0.72)',
+                 border: P === LIGHT ? '1px solid rgba(3,105,161,0.30)' : '1px solid rgba(56,189,248,0.3)',
+                 radius:4, px:5, py:2, shadowBlur:5, shadowColor:sh, letterSpacing:'0em',
+                 iconChar:'~', iconColor: P === LIGHT ? '#0369a1' : '#38bdf8' },
+    pass:      { fontSize:10, fontWeight:'600',
+                 color: P === LIGHT ? '#374151' : '#a3b4c2',
+                 subColor: P === LIGHT ? '#4a5568' : '#4a6070', subSize:8.5,
+                 bg: P === LIGHT ? 'rgba(248,250,252,0.90)' : 'rgba(10,20,30,0.65)',
+                 border: P === LIGHT ? '1px solid rgba(55,65,81,0.25)' : '1px solid rgba(80,110,140,0.25)',
+                 radius:4, px:5, py:2, shadowBlur:4, shadowColor:sh, letterSpacing:'0.02em',
+                 iconChar:'▲', iconColor: P === LIGHT ? '#374151' : '#a3b4c2' },
+    glacier:   { fontSize:10, fontWeight:'600',
+                 color: P === LIGHT ? '#0c4a6e' : '#bae6fd',
+                 subColor: P === LIGHT ? '#0369a1' : '#1a4a60', subSize:8.5,
+                 bg: P === LIGHT ? 'rgba(240,249,255,0.92)' : 'rgba(8,18,28,0.70)',
+                 border: P === LIGHT ? '1px solid rgba(12,74,110,0.30)' : '1px solid rgba(186,230,253,0.25)',
+                 radius:4, px:5, py:2, shadowBlur:4, shadowColor:sh, letterSpacing:'0em',
+                 iconChar:'❄', iconColor: P === LIGHT ? '#0c4a6e' : '#bae6fd' },
   };
   labels.forEach(place => {
     const st = TS[place.tier] ?? TS.village;
@@ -352,23 +409,33 @@ function buildRoadLabels(
   map: L.Map,
   roadLabels: import('@/data/joshimath-map-data').RoadLabel[],
   pane: string,
+  P = DARK,
 ): L.LayerGroup {
   const group = L.layerGroup();
   roadLabels.forEach(rl => {
     const isHwy = rl.type==='highway';
     const isSec = rl.type==='secondary';
-    const bg    = isHwy?'rgba(12,42,62,0.92)':isSec?'rgba(10,28,46,0.88)':'rgba(8,22,36,0.82)';
-    const border= isHwy?'1px solid rgba(200,212,232,0.5)':isSec?'1px solid rgba(143,163,188,0.4)':'1px solid rgba(92,112,128,0.35)';
-    const color = isHwy?C.highway:isSec?C.majorRoad:C.minorRoad;
+    const bg    = isHwy ? P.roadBadgeBg
+                : isSec ? (P === LIGHT ? 'rgba(248,250,252,0.94)' : 'rgba(10,28,46,0.88)')
+                :          (P === LIGHT ? 'rgba(241,245,249,0.90)' : 'rgba(8,22,36,0.82)');
+    const border = isHwy ? `1px solid ${P.roadBadgeBorder}`
+                 : isSec  ? (P === LIGHT ? '1px solid rgba(55,78,106,0.35)' : '1px solid rgba(143,163,188,0.4)')
+                 :           (P === LIGHT ? '1px solid rgba(90,110,130,0.28)' : '1px solid rgba(92,112,128,0.35)');
+    const color  = isHwy ? P.roadBadgeColor
+                 : isSec  ? P.majorRoad
+                 :           P.minorRoad;
+    const shieldBg    = P === LIGHT ? 'rgba(30,58,95,0.12)' : 'rgba(59,130,246,0.25)';
+    const shieldBorder= P === LIGHT ? '1px solid rgba(30,58,95,0.35)' : '1px solid rgba(59,130,246,0.4)';
+    const shieldColor = P === LIGHT ? '#1e3a5f' : '#93c5fd';
     const shield = isHwy
       ? `<span style="display:inline-flex;align-items:center;justify-content:center;
-          background:rgba(59,130,246,0.25);border:1px solid rgba(59,130,246,0.4);
+          background:${shieldBg};border:${shieldBorder};
           border-radius:3px;padding:0 4px;margin-right:4px;
-          font-size:9px;font-weight:800;color:#93c5fd;line-height:1.4">${rl.short}</span>` : '';
-    const label = isHwy?'': `<span style="font-size:${isSec?10:9}px;color:${color};font-weight:${isHwy?'700':'600'}">${rl.short}</span>`;
+          font-size:9px;font-weight:800;color:${shieldColor};line-height:1.4">${rl.short}</span>` : '';
+    const label = isHwy ? '' : `<span style="font-size:${isSec?10:9}px;color:${color};font-weight:${isHwy?'700':'600'}">${rl.short}</span>`;
     const html = `<div style="display:inline-flex;align-items:center;background:${bg};border:${border};
-      border-radius:4px;padding:2px 6px;box-shadow:0 1px 6px rgba(0,0,0,0.5);backdrop-filter:blur(4px);
-      pointer-events:none;user-select:none;white-space:nowrap;
+      border-radius:4px;padding:2px 6px;box-shadow:0 1px 5px rgba(0,0,0,${P===LIGHT?'0.14':'0.5'});
+      backdrop-filter:blur(4px);pointer-events:none;user-select:none;white-space:nowrap;
       transform:rotate(${rl.rotation??0}deg);font-family:'Inter',system-ui,sans-serif;">
       ${shield}${label}</div>`;
     const icon = L.divIcon({ html, className:'road-label',
@@ -442,12 +509,24 @@ function buildPoisGroup(
 // ─────────────────────────────────────────────────────────────────────────────
 // MapView component
 // ─────────────────────────────────────────────────────────────────────────────
-export function MapView({ requests, isOnline, selectedId, onSelect, region }: MapViewProps) {
+export function MapView({ requests, isOnline, selectedId, onSelect, region, theme, navDestination }: MapViewProps) {
   const containerRef   = useRef<HTMLDivElement>(null);
   const mapRef         = useRef<L.Map | null>(null);
   const groupsRef      = useRef<Record<string, L.LayerGroup>>({});
   const reqMarkersRef  = useRef<Record<string, L.Marker>>({});
   const gpsMarkerRef   = useRef<L.Marker | null>(null);
+  const destMarkerRef  = useRef<L.Marker | null>(null);
+  const watchIdRef     = useRef<number | null>(null);  // watchPosition ID for cleanup
+
+  // Directions overlay state (extended with live navigation fields)
+  const [dirInfo, setDirInfo] = useState<{
+    dest: NavDestination;
+    distanceKm: number | null;
+    bearing: string | null;
+    userCoords: [number, number] | null;
+    etaMinutes: number | null;
+    isNavActive: boolean;
+  } | null>(null);
 
   // Region state is now controlled from outside — no local region state
   const [_regionMenuOpen, _setRegionMenuOpen] = useState(false); // kept for future use
@@ -480,8 +559,12 @@ export function MapView({ requests, isOnline, selectedId, onSelect, region }: Ma
       preferCanvas:true,
     });
 
+    // Detect current theme — pick palette accordingly
+    const isLight = theme === 'light';
+    const P = isLight ? LIGHT : DARK;
+
     containerRef.current.style.background =
-      `radial-gradient(ellipse at 60% 40%, ${C.bgHill} 0%, ${C.bgMid} 45%, ${C.bgDeep} 100%)`;
+      `radial-gradient(ellipse at 60% 40%, ${P.bgHill} 0%, ${P.bgMid} 45%, ${P.bgDeep} 100%)`;
 
     // Topo texture overlay (local SVG — no network)
     const terrainSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%">
@@ -521,13 +604,13 @@ export function MapView({ requests, isOnline, selectedId, onSelect, region }: Ma
       .addTo(map);
 
     // ── Roads ──
-    const roadsGroup = buildRoadsGroup(map, region==='ncr' ? NCR_ROADS_GEOJSON : ROADS_GEOJSON, 'road');
+    const roadsGroup = buildRoadsGroup(map, region==='ncr' ? NCR_ROADS_GEOJSON : ROADS_GEOJSON, 'road', P);
 
     // ── Rivers ──
-    const riversGroup = buildRiversGroup(map, region==='ncr' ? NCR_RIVERS_GEOJSON : RIVERS_GEOJSON, 'water');
+    const riversGroup = buildRiversGroup(map, region==='ncr' ? NCR_RIVERS_GEOJSON : RIVERS_GEOJSON, 'water', P);
 
     // ── Flood zones ──
-    const floodsGroup = buildFloodGroup(map, region==='ncr' ? NCR_FLOOD_ZONES_GEOJSON : FLOOD_ZONES_GEOJSON, 'hazard');
+    const floodsGroup = buildFloodGroup(map, region==='ncr' ? NCR_FLOOD_ZONES_GEOJSON : FLOOD_ZONES_GEOJSON, 'hazard', P);
 
     // ── Badrinath-only hazard layers ──
     const landslidesGroup = L.layerGroup();
@@ -535,7 +618,7 @@ export function MapView({ requests, isOnline, selectedId, onSelect, region }: Ma
     if (region === 'badrinath') {
       LANDSLIDE_ZONES_GEOJSON.features.forEach(f => {
         const p = f.properties as {name:string;severity:string;description:string};
-        const col = p.severity==='critical'?C.slideCrit:p.severity==='high'?C.slideHigh:C.slideMod;
+        const col = p.severity==='critical'?P.slideCrit:p.severity==='high'?P.slideHigh:P.slideMod;
         L.geoJSON(f as GeoJSON.Feature, {
           pane:'hazard', style:{color:col,fillColor:col,fillOpacity:0.22,weight:2,opacity:0.8},
         })
@@ -548,9 +631,9 @@ export function MapView({ requests, isOnline, selectedId, onSelect, region }: Ma
       SAFE_ZONES_GEOJSON.features.forEach(f => {
         const p = f.properties as {name:string;description:string;capacity:number};
         L.geoJSON(f as GeoJSON.Feature, {
-          pane:'hazard', style:{color:C.safe,fillColor:C.safe,fillOpacity:0.12,weight:1.5,opacity:0.7,dashArray:'6 4'},
+          pane:'hazard', style:{color:P.safe,fillColor:P.safe,fillOpacity:0.12,weight:1.5,opacity:0.7,dashArray:'6 4'},
         })
-        .bindTooltip(`<div class="tt-row"><span class="tt-dot" style="background:#16a34a"></span>
+        .bindTooltip(`<div class="tt-row"><span class="tt-dot" style="background:${P.safe}"></span>
           <b>Safe Zone</b></div>${p.name}`,
           {sticky:true,className:'map-tt',direction:'top'})
         .addTo(safeGroup);
@@ -575,7 +658,12 @@ export function MapView({ requests, isOnline, selectedId, onSelect, region }: Ma
     // ── Building footprints (Badrinath only) ──
     const buildingsGroup = L.layerGroup();
     if (region === 'badrinath') {
-      const BLD_COLORS: Record<string,{fill:string;stroke:string}> = {
+      const BLD_COLORS: Record<string,{fill:string;stroke:string}> = isLight ? {
+        residential:{fill:'#dbeafe',stroke:'#2563eb'},government:{fill:'#dcfce7',stroke:'#16a34a'},
+        commercial:{fill:'#fef9c3',stroke:'#ca8a04'},religious:{fill:'#ffedd5',stroke:'#c2410c'},
+        educational:{fill:'#e0f2fe',stroke:'#0369a1'},medical:{fill:'#fee2e2',stroke:'#dc2626'},
+        military:{fill:'#d1fae5',stroke:'#059669'},utility:{fill:'#f3e8ff',stroke:'#7c3aed'},
+      } : {
         residential:{fill:'#1a3a5c',stroke:'#2a5a82'},government:{fill:'#1a3a2c',stroke:'#2a6a4a'},
         commercial:{fill:'#2a2a10',stroke:'#6a5a1a'},religious:{fill:'#2a1a08',stroke:'#b45309'},
         educational:{fill:'#0a2a3a',stroke:'#1e6a8a'},medical:{fill:'#1a0808',stroke:'#dc2626'},
@@ -604,11 +692,11 @@ export function MapView({ requests, isOnline, selectedId, onSelect, region }: Ma
 
     // ── Place labels ──
     const pl = region==='ncr' ? NCR_PLACE_LABELS : PLACE_LABELS;
-    const labelsGroup = buildPlaceLabels(map, pl, 'labels');
+    const labelsGroup = buildPlaceLabels(map, pl, 'labels', P);
 
     // ── Road labels ──
     const rl = region==='ncr' ? NCR_ROAD_LABELS : ROAD_LABELS;
-    const roadLabelsGroup = buildRoadLabels(map, rl, 'roadLabels');
+    const roadLabelsGroup = buildRoadLabels(map, rl, 'roadLabels', P);
 
     // ── POI markers ──
     const pm = region==='ncr' ? NCR_FAMOUS_POIS : FAMOUS_POIS;
@@ -636,7 +724,7 @@ export function MapView({ requests, isOnline, selectedId, onSelect, region }: Ma
 
     mapRef.current = map;
     return () => { map.remove(); mapRef.current = null; };
-  }, [region]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [region, theme]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Aid-request markers (region-aware coords) ───────────────────────────
   useEffect(() => {
@@ -717,6 +805,174 @@ export function MapView({ requests, isOnline, selectedId, onSelect, region }: Ma
     });
   }, []);
 
+  // ── React to incoming navDestination prop — live GPS navigation ─────────
+  useEffect(() => {
+    const map = mapRef.current;
+
+    // Stop any existing watcher when destination changes or clears
+    if (watchIdRef.current !== null) {
+      navigator.geolocation?.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
+    }
+
+    if (!map || !navDestination) return;
+
+    // Remove previous destination marker + route line
+    if (destMarkerRef.current) {
+      const prev = destMarkerRef.current as unknown as { _rl?: L.Polyline };
+      if (prev._rl) prev._rl.remove();
+      destMarkerRef.current.remove();
+      destMarkerRef.current = null;
+    }
+
+    // Aid requests use relative coords [0,0] — fall back to region centre
+    const isReal = navDestination.coords[0] !== 0 || navDestination.coords[1] !== 0;
+    const destLL: [number, number] = isReal ? navDestination.coords : rmeta.center;
+
+    // Destination pin (orange D marker)
+    const destIcon = L.divIcon({
+      html: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 44" width="36" height="44">
+        <defs><filter id="dsh2"><feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-color="#000" flood-opacity="0.5"/></filter></defs>
+        <path d="M18 1C10.82 1 5 6.82 5 14c0 10.5 13 29 13 29s13-18.5 13-29C31 6.82 25.18 1 18 1z"
+              fill="#f97316" filter="url(#dsh2)" stroke="white" stroke-width="2"/>
+        <text x="18" y="18" text-anchor="middle" dominant-baseline="middle" font-size="11" fill="white" font-weight="800">D</text>
+      </svg>`,
+      className: '', iconSize:[36,44], iconAnchor:[18,44], popupAnchor:[0,-44],
+    });
+
+    destMarkerRef.current = L.marker(destLL, { icon: destIcon, pane: 'markerLayer', zIndexOffset: 3000 })
+      .bindPopup(`<div style="font-family:'Inter',system-ui;color:#e2e8f0;min-width:180px">
+        <p style="font-weight:700;font-size:13px;margin:0 0 4px">${navDestination.name}</p>
+        <p style="font-size:11px;color:#94a3b8;margin:0">${navDestination.address}</p>
+        ${navDestination.phone ? `<p style="margin-top:6px;font-size:11px"><a href="tel:${navDestination.phone.replace(/[\s\-().]/g,'')}" style="color:#38bdf8">📞 ${navDestination.phone}</a></p>` : ''}
+      </div>`, { className:'map-popup' })
+      .addTo(map)
+      .openPopup();
+
+    map.setView(destLL, Math.max(map.getZoom(), 14));
+
+    // ── Haversine distance + bearing helper ───────────────────────────────
+    const computeNav = (latitude: number, longitude: number) => {
+      const R = 6371;
+      const dLat = (destLL[0]-latitude)*Math.PI/180;
+      const dLon = (destLL[1]-longitude)*Math.PI/180;
+      const a = Math.sin(dLat/2)**2 +
+                Math.cos(latitude*Math.PI/180)*Math.cos(destLL[0]*Math.PI/180)*Math.sin(dLon/2)**2;
+      const distKm = R*2*Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      const y2 = Math.sin((destLL[1]-longitude)*Math.PI/180)*Math.cos(destLL[0]*Math.PI/180);
+      const x2 = Math.cos(latitude*Math.PI/180)*Math.sin(destLL[0]*Math.PI/180)-
+                 Math.sin(latitude*Math.PI/180)*Math.cos(destLL[0]*Math.PI/180)*
+                 Math.cos((destLL[1]-longitude)*Math.PI/180);
+      const bDeg = (Math.atan2(y2,x2)*180/Math.PI+360)%360;
+      const bearing = ['N','NE','E','SE','S','SW','W','NW'][Math.round(bDeg/45)%8];
+      return { distKm, bearing };
+    };
+
+    // ── ETA estimator ──────────────────────────────────────────────────────
+    // Uses device-reported speed when available; otherwise assumes walking (4 km/h)
+    // or slow vehicle (20 km/h for distances > 2 km). Always labelled "Estimated".
+    const estimateEta = (distKm: number, speedMps?: number | null): number => {
+      if (speedMps && speedMps > 0.5) {
+        // Device reported speed in m/s — convert to minutes
+        return Math.ceil((distKm * 1000) / speedMps / 60);
+      }
+      // Heuristic: walking speed 4 km/h under 2 km, 20 km/h above
+      const kmh = distKm < 2 ? 4 : 20;
+      return Math.ceil((distKm / kmh) * 60);
+    };
+
+    // ── Track previous user position to debounce trivial movements ────────
+    let prevLat: number | null = null;
+    let prevLng: number | null = null;
+    const MIN_MOVE_M = 15; // metres — ignore updates smaller than this
+
+    const onPosition = (pos: GeolocationPosition) => {
+      const { latitude, longitude, speed } = pos.coords;
+
+      // Debounce: skip if user moved less than MIN_MOVE_M
+      if (prevLat !== null && prevLng !== null) {
+        const dM = Math.sqrt(
+          ((latitude-prevLat)*111320)**2 +
+          ((longitude-prevLng)*111320*Math.cos(latitude*Math.PI/180))**2,
+        );
+        if (dM < MIN_MOVE_M) return;
+      }
+      prevLat = latitude; prevLng = longitude;
+
+      const userLL: [number, number] = [latitude, longitude];
+      const { distKm, bearing } = computeNav(latitude, longitude);
+      const etaMinutes = estimateEta(distKm, speed);
+
+      // Update user marker
+      if (gpsMarkerRef.current) gpsMarkerRef.current.remove();
+      gpsMarkerRef.current = L.marker(userLL, {
+        icon: ICONS.gps, pane: 'markerLayer', zIndexOffset: 2000,
+      } as L.MarkerOptions).addTo(map);
+
+      // Update dashed route line
+      const existing = destMarkerRef.current as unknown as { _rl?: L.Polyline };
+      if (existing?._rl) existing._rl.remove();
+      const line = L.polyline([userLL, destLL], {
+        color:'#f97316', weight:3, opacity:0.8, dashArray:'10 7',
+      }).addTo(map);
+      if (destMarkerRef.current) {
+        (destMarkerRef.current as unknown as { _rl?: L.Polyline })._rl = line;
+      }
+
+      setDirInfo({
+        dest: navDestination,
+        distanceKm: distKm,
+        bearing,
+        userCoords: userLL,
+        etaMinutes,
+        isNavActive: true,
+      });
+    };
+
+    const onError = () => {
+      setDirInfo({
+        dest: navDestination,
+        distanceKm: null,
+        bearing: null,
+        userCoords: null,
+        etaMinutes: null,
+        isNavActive: false,
+      });
+    };
+
+    if (navigator.geolocation) {
+      // Start live tracking with watchPosition
+      watchIdRef.current = navigator.geolocation.watchPosition(
+        onPosition,
+        onError,
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 },
+      );
+    } else {
+      setDirInfo({
+        dest: navDestination,
+        distanceKm: null,
+        bearing: null,
+        userCoords: null,
+        etaMinutes: null,
+        isNavActive: false,
+      });
+    }
+
+    return () => {
+      // Stop watcher and clean up markers
+      if (watchIdRef.current !== null) {
+        navigator.geolocation?.clearWatch(watchIdRef.current);
+        watchIdRef.current = null;
+      }
+      if (destMarkerRef.current) {
+        const p = destMarkerRef.current as unknown as { _rl?: L.Polyline };
+        if (p._rl) p._rl.remove();
+        destMarkerRef.current.remove();
+        destMarkerRef.current = null;
+      }
+    };
+  }, [navDestination]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── GPS (works in both regions) ──────────────────────────────────────────
   const handleGps = useCallback(() => {
     const map = mapRef.current; if(!map) return;
@@ -743,6 +999,22 @@ export function MapView({ requests, isOnline, selectedId, onSelect, region }: Ma
   const handleRecenter = useCallback(() => mapRef.current?.setView(rmeta.center, rmeta.zoom), [rmeta]);
   const handleZoomIn   = useCallback(() => mapRef.current?.zoomIn(),  []);
   const handleZoomOut  = useCallback(() => mapRef.current?.zoomOut(), []);
+
+  // Stop live navigation and clean up watcher
+  const handleStopNavigation = useCallback(() => {
+    if (watchIdRef.current !== null) {
+      navigator.geolocation?.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
+    }
+    setDirInfo(null);
+  }, []);
+
+  // Recenter on user's current position during navigation
+  const handleRecenterOnUser = useCallback(() => {
+    const map = mapRef.current;
+    if (!map || !dirInfo?.userCoords) return;
+    map.setView(dirInfo.userCoords, Math.max(map.getZoom(), 15));
+  }, [dirInfo?.userCoords]);
 
   // ── Offline search ───────────────────────────────────────────────────────
   const activeIndex = region==='ncr' ? NCR_SEARCH_INDEX : SEARCH_INDEX;
@@ -993,7 +1265,110 @@ export function MapView({ requests, isOnline, selectedId, onSelect, region }: Ma
         </div>
       )}
 
-      {/* GPS error */}
+      {/* ── Live Navigation panel ── */}
+      {dirInfo && (
+        <div className="absolute inset-x-2 bottom-2 z-30 sm:inset-x-3 sm:bottom-3
+          rounded-xl border border-[#f97316]/40 bg-[#0d1f33]/97 shadow-2xl backdrop-blur-xl
+          animate-float-up overflow-hidden">
+          <div className="flex items-start gap-3 p-3 sm:p-4 pr-10">
+            {/* Nav icon */}
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#f97316]/20">
+              <Navigation className="h-4 w-4 text-[#f97316]" />
+            </div>
+            <div className="min-w-0 flex-1">
+              {/* Header row */}
+              <div className="flex items-center gap-2">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-[#f97316]">
+                  {dirInfo.isNavActive ? '🟢 Navigation Active' : 'In-App Directions'}
+                </p>
+                {dirInfo.isNavActive && (
+                  <span className="flex h-1.5 w-1.5 rounded-full">
+                    <span className="animate-ping absolute inline-flex h-1.5 w-1.5 rounded-full bg-[#f97316] opacity-75" />
+                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[#f97316]" />
+                  </span>
+                )}
+              </div>
+
+              <p className="text-sm font-bold text-foreground leading-tight mt-0.5">{dirInfo.dest.name}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{dirInfo.dest.address}</p>
+
+              {/* Distance + ETA */}
+              {dirInfo.distanceKm !== null ? (
+                <div className="mt-2 flex flex-wrap items-center gap-3">
+                  <span className="flex items-center gap-1 text-xs font-bold text-foreground">
+                    <MapPin className="h-3.5 w-3.5 text-info" />
+                    {dirInfo.distanceKm < 1
+                      ? `${Math.round(dirInfo.distanceKm * 1000)} m`
+                      : `${dirInfo.distanceKm.toFixed(1)} km`}
+                  </span>
+                  {dirInfo.etaMinutes !== null && (
+                    <span className="flex items-center gap-1 text-xs font-bold text-foreground">
+                      <Clock className="h-3.5 w-3.5 text-warning" />
+                      ETA ~{dirInfo.etaMinutes} min
+                    </span>
+                  )}
+                  {dirInfo.bearing && (
+                    <span className="flex items-center gap-1 text-xs font-semibold text-muted-foreground">
+                      <Crosshair className="h-3 w-3" />
+                      Head {dirInfo.bearing}
+                    </span>
+                  )}
+                  <span className="w-full text-[9px] text-muted-foreground/70">
+                    Straight-line · Estimated time · Verify route safety
+                  </span>
+                </div>
+              ) : (
+                <p className="mt-1.5 text-[11px] text-warning">
+                  📍 GPS unavailable — destination shown on map
+                </p>
+              )}
+
+              {/* Action buttons */}
+              <div className="mt-2.5 flex flex-wrap gap-1.5">
+                {/* Stop Navigation */}
+                <button
+                  onClick={handleStopNavigation}
+                  className="flex items-center gap-1 rounded-lg border border-[#f97316]/40 bg-[#f97316]/10
+                    px-2.5 py-1.5 text-[11px] font-bold text-[#f97316] hover:bg-[#f97316]/20
+                    transition-colors active:scale-95"
+                >
+                  <X className="h-3 w-3" /> Stop Navigation
+                </button>
+
+                {/* Recenter on user */}
+                {dirInfo.userCoords && (
+                  <button
+                    onClick={handleRecenterOnUser}
+                    className="flex items-center gap-1 rounded-lg border border-border bg-secondary/40
+                      px-2.5 py-1.5 text-[11px] font-bold text-foreground hover:bg-secondary
+                      transition-colors active:scale-95"
+                    title="Recenter on my location"
+                  >
+                    <Crosshair className="h-3 w-3 text-info" /> Recenter
+                  </button>
+                )}
+
+                {/* Call button */}
+                {dirInfo.dest.phone && (
+                  <a href={`tel:${dirInfo.dest.phone.replace(/[\s\-().]/g,'')}`}
+                    className="flex items-center gap-1.5 rounded-lg border border-[#38bdf8]/30 bg-[#38bdf8]/10
+                      px-2.5 py-1.5 text-[11px] font-bold text-[#38bdf8] hover:bg-[#38bdf8]/20
+                      transition-colors active:scale-95">
+                    <Phone className="h-3 w-3" /> Call
+                  </a>
+                )}
+              </div>
+            </div>
+          </div>
+          {/* Close (X) button — also stops navigation */}
+          <button onClick={handleStopNavigation}
+            className="absolute right-3 top-3 rounded-lg p-1.5 text-[#4a6a82] hover:bg-[#162840] hover:text-foreground transition-colors"
+            aria-label="Stop navigation">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
       {gpsError && (
         <div className="absolute bottom-16 right-2 z-30 flex items-center gap-2 rounded-lg
           border border-alert/30 bg-[#0c1827]/95 px-3 py-2 text-xs text-alert
