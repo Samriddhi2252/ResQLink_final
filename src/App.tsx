@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo } from 'react';
 import { TopNav } from '@/components/top-nav';
 import { StatusBanner } from '@/components/status-banner';
 import { MapView } from '@/components/map-view';
@@ -25,13 +25,6 @@ import { toast } from 'sonner';
 import type { NavDestination } from '@/hooks/use-navigation';
 
 import { useCrossDeviceSync } from '@/hooks/use-cross-device-sync';
-
-// ── P2P offline network ───────────────────────────────────────────────────────
-import { useP2PNetwork } from '@/hooks/use-p2p-network';
-import { OfflineNetworkPanel } from '@/components/offline-network-panel';
-import { P2PStatusBadge } from '@/components/p2p-status-badge';
-import type { P2PRecord } from '@/lib/p2p-db';
-import { computeExpiresAt } from '@/lib/p2p-db';
 
 function App() {
   const { status, toggle, isOnline } = useNetwork();
@@ -61,113 +54,6 @@ function App() {
     cancelHelpRequest: handleCancelHelp,
     restoreRequests: handleRestoreRequests,
   } = useCrossDeviceSync();
-
-  // ── P2P Offline Network ───────────────────────────────────────────────────
-  const [p2pPanelOpen, setP2PPanelOpen] = useState(false);
-
-  /**
-   * Called by the P2P hook whenever records arrive from a peer.
-   * Converts each P2PRecord into an AidRequest and feeds it into the
-   * existing addCustomRequest pipeline (localStorage + server sync).
-   * Deduplication is handled both in p2p-db (IndexedDB) and in
-   * useCrossDeviceSync (server-side version check).
-   */
-  const handleP2PRecordsReceived = useCallback((records: P2PRecord[]) => {
-    let newCount = 0;
-    for (const rec of records) {
-      if (!rec.payload || rec.status === 'RESOLVED' || rec.status === 'EXPIRED') continue;
-
-      const p = rec.payload;
-      // Map P2P record type → AidRequest category
-      const categoryMap: Record<string, RequestCategory> = {
-        MEDICAL: 'medical', FOOD: 'food', WATER: 'food',
-        SHELTER: 'shelter', RESCUE: 'rescue', VOLUNTEER: 'volunteers',
-        RESOURCE: 'rescue', STATUS_UPDATE: 'rescue',
-      };
-      const category: RequestCategory = categoryMap[rec.type] ?? 'rescue';
-
-      const aidReq: AidRequest = {
-        id:            rec.id,
-        category,
-        priority:      (p.priority as AidRequest['priority']) ?? 'urgent',
-        status:        'active',
-        title:         (p.title as string)        || `P2P: ${rec.type} Request`,
-        details:       (p.details as string)      || `Received via offline network (${rec.hopCount} hop${rec.hopCount !== 1 ? 's' : ''})`,
-        items:         Array.isArray(p.items) ? (p.items as string[]) : [],
-        contactName:   (p.contactName as string)  || 'P2P Relay',
-        contactPhone:  (p.contactPhone as string) || '',
-        distanceMiles: (p.distanceMiles as number) ?? 0,
-        createdAt:     rec.createdAt,
-        coords:        (p.coords as { x: number; y: number }) || { x: 50, y: 50 },
-        peopleCount:   (p.peopleCount as number)  ?? 1,
-        isUserCreated: false,
-        region:        (p.region as RegionKey)    || 'ncr',
-      };
-
-      addCustomRequest(aidReq);
-      newCount++;
-    }
-
-    if (newCount > 0) {
-      toast.success(`📡 ${newCount} record${newCount !== 1 ? 's' : ''} received via Offline Network`, {
-        description: 'Emergency data relayed from a nearby ResQLinkk device.',
-        duration: 4000,
-      });
-    }
-  }, [addCustomRequest]);
-
-  /**
-   * Called by the P2P hook when internet returns.
-   * Pushes all locally-held P2P records to the backend via the existing
-   * addCustomRequest pipeline, which already handles server deduplication.
-   */
-  const handleP2PSyncToBackend = useCallback((records: P2PRecord[]) => {
-    for (const rec of records) {
-      if (!rec.payload || rec.status === 'RESOLVED' || rec.status === 'EXPIRED') continue;
-      const p = rec.payload;
-      const categoryMap: Record<string, RequestCategory> = {
-        MEDICAL: 'medical', FOOD: 'food', WATER: 'food',
-        SHELTER: 'shelter', RESCUE: 'rescue', VOLUNTEER: 'volunteers',
-        RESOURCE: 'rescue', STATUS_UPDATE: 'rescue',
-      };
-      const category: RequestCategory = categoryMap[rec.type] ?? 'rescue';
-      const aidReq: AidRequest = {
-        id:            rec.id,
-        category,
-        priority:      (p.priority as AidRequest['priority']) ?? 'urgent',
-        status:        'active',
-        title:         (p.title as string) || `P2P: ${rec.type} Request`,
-        details:       (p.details as string) || 'Received via offline P2P network',
-        items:         Array.isArray(p.items) ? (p.items as string[]) : [],
-        contactName:   (p.contactName as string)  || 'P2P Relay',
-        contactPhone:  (p.contactPhone as string) || '',
-        distanceMiles: (p.distanceMiles as number) ?? 0,
-        createdAt:     rec.createdAt,
-        coords:        (p.coords as { x: number; y: number }) || { x: 50, y: 50 },
-        peopleCount:   (p.peopleCount as number) ?? 1,
-        isUserCreated: false,
-        region:        (p.region as RegionKey) || 'ncr',
-      };
-      addCustomRequest(aidReq);
-    }
-  }, [addCustomRequest]);
-
-  const {
-    phase:          p2pPhase,
-    peers:          p2pPeers,
-    connectedCount: p2pConnectedCount,
-    stats:          p2pStats,
-    recordCount:    p2pRecordCount,
-    errorMessage:   p2pError,
-    deviceId:       p2pDeviceId,
-    deviceAlias:    p2pDeviceAlias,
-    syncNow:        p2pSyncNow,
-    publishRecord:  p2pPublishRecord,
-  } = useP2PNetwork({
-    isOnline,
-    onRecordsReceived: handleP2PRecordsReceived,
-    onSyncToBackend:   handleP2PSyncToBackend,
-  });
 
   // ── All data is derived from the selected region ──────────────────────────
   const regionKey   = region === 'ncr' ? 'ncr' : 'badrinath';
@@ -264,44 +150,6 @@ function App() {
 
     addCustomRequest(newAidRequest);
 
-    // ── Also publish into the P2P offline network ─────────────────────────
-    // Map AidRequest fields into a P2PRecord so it can be store-and-forwarded
-    // to nearby devices even when the internet is down.
-    const p2pType = ({
-      medical:    'MEDICAL',
-      food:       'FOOD',
-      shelter:    'SHELTER',
-      volunteers: 'VOLUNTEER',
-      rescue:     'RESCUE',
-    } as const)[newAidRequest.category] ?? 'RESCUE';
-
-    p2pPublishRecord({
-      id:             newAidRequest.id,
-      type:           p2pType,
-      version:        1,
-      createdAt:      newAidRequest.createdAt,
-      updatedAt:      newAidRequest.createdAt,
-      expiresAt:      computeExpiresAt(p2pType, newAidRequest.createdAt),
-      status:         'OPEN',
-      sourceDeviceId: p2pDeviceId,
-      payload: {
-        title:         newAidRequest.title,
-        details:       newAidRequest.details,
-        category:      newAidRequest.category,
-        priority:      newAidRequest.priority,
-        contactName:   newAidRequest.contactName,
-        contactPhone:  newAidRequest.contactPhone,
-        distanceMiles: newAidRequest.distanceMiles,
-        coords:        newAidRequest.coords,
-        peopleCount:   newAidRequest.peopleCount,
-        items:         newAidRequest.items,
-        region:        newAidRequest.region,
-        isUserCreated: true,
-        createdAt:     newAidRequest.createdAt,
-        id:            newAidRequest.id,
-      },
-    }).catch(() => {}); // non-fatal if IDB unavailable
-
     setSelectedId(newAidRequest.id);
 
     if (!isOnline) {
@@ -347,23 +195,6 @@ function App() {
         onToggleTheme={toggleTheme}
         onTriage={() => setTriageOpen(true)}
       />
-
-      {/* ── P2P offline network status bar ── */}
-      <div className="w-full border-b border-border bg-card/40 px-3 py-1.5 sm:px-6">
-        <div className="mx-auto flex max-w-[1600px] items-center justify-between gap-3">
-          <p className="text-[10px] text-muted-foreground hidden sm:block">
-            Peer-to-peer offline mesh · LAN WebRTC · Store &amp; Forward
-          </p>
-          <div className="flex items-center gap-2 ml-auto">
-            <P2PStatusBadge
-              phase={p2pPhase}
-              connectedCount={p2pConnectedCount}
-              peerCount={p2pPeers.length}
-              onClick={() => setP2PPanelOpen(true)}
-            />
-          </div>
-        </div>
-      </div>
 
       <StatusBanner
         activeFilter={filter}
@@ -622,22 +453,6 @@ function App() {
         resources={resources}
         requests={requests}
         isOnline={isOnline}
-      />
-
-      {/* ── Offline Network Panel ── */}
-      <OfflineNetworkPanel
-        open={p2pPanelOpen}
-        onOpenChange={setP2PPanelOpen}
-        phase={p2pPhase}
-        peers={p2pPeers}
-        connectedCount={p2pConnectedCount}
-        stats={p2pStats}
-        recordCount={p2pRecordCount}
-        errorMessage={p2pError}
-        deviceId={p2pDeviceId}
-        deviceAlias={p2pDeviceAlias}
-        isOnline={isOnline}
-        onSyncNow={p2pSyncNow}
       />
 
       <div className="h-20 pb-[max(0.5rem,env(safe-area-inset-bottom))] lg:hidden" />
