@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   MessageCircle, X, Send, Bot, User, WifiOff,
   Loader2, RotateCcw, Sparkles, Zap, ArrowLeft,
+  ShieldCheck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { findOfflineAnswer, SUGGESTED_QUESTIONS } from '@/data/help-bot-knowledge';
@@ -34,7 +35,7 @@ const API_BASE   = 'http://localhost:3001';
 const TIMEOUT_MS = 10000;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Tiny markdown → React renderer
+// Tiny markdown → React renderer (unchanged)
 // ─────────────────────────────────────────────────────────────────────────────
 function boldify(s: string) {
   return s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
@@ -97,18 +98,20 @@ function Markdown({ text }: { text: string }) {
 // ─────────────────────────────────────────────────────────────────────────────
 function uid() { return Math.random().toString(36).slice(2, 10); }
 
-export function HelpBot({ region, locationLabel, shelters, resources, requests, isOnline }: HelpBotProps) {
-  const [open, setOpen]             = useState(false);
+export function HelpBot({
+  region, locationLabel, shelters, resources, requests, isOnline,
+}: HelpBotProps) {
+  const [open, setOpen]         = useState(false);
   useModalBack(open, () => setOpen(false));
 
-  const [input, setInput]           = useState('');
-  const [messages, setMessages]     = useState<Message[]>([]);
-  const [loading, setLoading]       = useState(false);
-  const [geminiUp, setGeminiUp]     = useState<boolean | null>(null); // null = not probed yet
+  const [input, setInput]       = useState('');
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [loading, setLoading]   = useState(false);
+  const [geminiUp, setGeminiUp] = useState<boolean | null>(null);
+
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef  = useRef<HTMLInputElement>(null);
 
-  // Current region context for dynamic offline answers
   const ctx: RegionContext = { locationLabel, shelters, resources, requests };
 
   // Scroll to bottom
@@ -121,7 +124,7 @@ export function HelpBot({ region, locationLabel, shelters, resources, requests, 
     if (open) setTimeout(() => inputRef.current?.focus(), 150);
   }, [open]);
 
-  // Probe backend health whenever chat opens or network toggles
+  // Probe backend health
   useEffect(() => {
     if (!open || !isOnline) { if (!isOnline) setGeminiUp(false); return; }
     let live = true;
@@ -145,7 +148,7 @@ export function HelpBot({ region, locationLabel, shelters, resources, requests, 
     if (open && messages.length === 0) {
       setMessages([{
         id: uid(), role: 'bot', mode: 'offline', ts: Date.now(),
-        text: `👋 Hi! I'm the **ResQLink Disaster Assistant**.
+        text: `👋 Hi! I'm the **ResQLinkk Disaster Assistant**.
 
 I can help you with:
 • Finding **shelters, food, water, and medical help** in ${locationLabel}
@@ -158,7 +161,7 @@ What do you need?`,
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  // Notify on region change (only after first welcome message)
+  // Region change notification
   const prevRegion = useRef(region);
   useEffect(() => {
     if (prevRegion.current === region) return;
@@ -182,9 +185,8 @@ What do you need?`,
     let reply = '';
     let mode: 'online' | 'offline' = 'offline';
 
-    // ── Try Gemini backend ─────────────────────────────────────────────────
+    // Try Gemini backend
     if (isOnline && geminiUp !== false) {
-      // Collect GPS non-blockingly
       let gps: string | undefined;
       if (navigator.geolocation) {
         await new Promise<void>(resolve => {
@@ -236,7 +238,7 @@ What do you need?`,
       }
     }
 
-    // ── Offline fallback ────────────────────────────────────────────────────
+    // Offline fallback
     if (!reply) {
       reply = findOfflineAnswer(q, ctx)
         ?? "I'm not sure about that. Try asking about shelters, food, medical help, disaster safety, or how to use the app.";
@@ -255,34 +257,39 @@ What do you need?`,
     }]);
   };
 
-  // UI status
-  const statusLabel = geminiUp === true ? 'AI Assistant • Online'
-    : geminiUp === false                 ? 'AI Assistant • Offline'
-    :                                      'AI Assistant';
+  const statusLabel = geminiUp === true  ? 'Gemini AI · Online'
+    : geminiUp === false                  ? 'Offline Mode'
+    :                                       'ResQ Assistant';
   const dotClass = geminiUp === true  ? 'bg-success animate-pulse'
     : geminiUp === false              ? 'bg-warning'
     :                                   'bg-muted-foreground';
 
   return (
     <>
-      {/* ── Floating bubble ── */}
+      {/* ── Floating trigger bubble ── */}
       <button
         onClick={() => setOpen(v => !v)}
         aria-label="Open Disaster Assistant"
         className={cn(
           'fixed bottom-24 right-4 z-50 lg:bottom-6 lg:right-6',
-          'flex h-14 w-14 items-center justify-center rounded-full',
-          'bg-info shadow-2xl text-white ring-4 ring-info/25',
+          'flex flex-col items-center justify-center gap-0.5',
+          'h-14 w-14 rounded-2xl',
+          'bg-info shadow-2xl text-white',
+          'ring-4 ring-info/20 shadow-info/30',
           'transition-all hover:scale-105 active:scale-95',
           open && 'opacity-0 pointer-events-none scale-90',
         )}
       >
-        <MessageCircle className="h-6 w-6" />
-        {/* Attention ping — visible before first open */}
+        <ShieldCheck className="h-5 w-5" />
+        <span className="text-[8px] font-bold tracking-wide leading-none">ResQ AI</span>
+
+        {/* Attention badge — before first open */}
         {messages.length === 0 && (
           <span className="absolute -top-1 -right-1 flex h-4 w-4">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-alert opacity-60" />
-            <span className="relative inline-flex h-4 w-4 items-center justify-center rounded-full bg-alert text-[8px] font-bold text-white">AI</span>
+            <span className="relative inline-flex h-4 w-4 items-center justify-center rounded-full bg-alert text-[7px] font-bold text-white">
+              AI
+            </span>
           </span>
         )}
       </button>
@@ -291,52 +298,65 @@ What do you need?`,
       {open && (
         <>
           {/* Mobile backdrop */}
-          <div className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm lg:hidden"
-            onClick={() => setOpen(false)} />
+          <div
+            className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm lg:hidden"
+            onClick={() => setOpen(false)}
+          />
 
           <div className={cn(
             'fixed z-50 flex flex-col overflow-hidden',
-            'bottom-20 inset-x-2 lg:bottom-6 lg:left-auto lg:right-6 lg:w-[420px]',
-            'max-h-[78vh] lg:max-h-[640px]',
+            'bottom-20 inset-x-3 lg:bottom-6 lg:left-auto lg:right-6 lg:w-[420px]',
+            'max-h-[80vh] lg:max-h-[640px]',
             'rounded-2xl border border-border bg-card shadow-2xl',
             'animate-float-up',
           )}>
 
             {/* ── Header ── */}
-            <div className="flex shrink-0 items-center gap-2.5 border-b border-border bg-card/95 px-3.5 py-2.5 sm:px-4 sm:py-3 backdrop-blur-md">
+            <div className="flex shrink-0 items-center gap-2.5 border-b border-border glass-strong px-4 py-3">
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="flex items-center gap-1 rounded-lg border border-border bg-secondary/50 px-2 py-1 text-xs font-bold text-foreground hover:bg-secondary active:scale-95 transition-all mr-0.5"
-                aria-label="Go back"
+                className="flex items-center gap-1 rounded-lg border border-border bg-secondary/50
+                  px-2.5 py-1.5 text-xs font-bold hover:bg-secondary active:scale-95 transition-all"
+                aria-label="Close assistant"
               >
                 <ArrowLeft className="h-3.5 w-3.5" />
-                <span>Back</span>
+                Back
               </button>
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-info/15">
+
+              {/* Bot avatar */}
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-info/15 ring-1 ring-info/25">
                 <Bot className="h-4 w-4 text-info" />
               </div>
+
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-bold text-foreground leading-tight">Disaster Assistant</p>
                 <div className="flex items-center gap-1.5 mt-0.5">
                   <span className={cn('h-1.5 w-1.5 rounded-full flex-shrink-0', dotClass)} />
                   <span className="text-[10px] text-muted-foreground truncate">{statusLabel}</span>
                   {geminiUp === true  && <Sparkles className="h-2.5 w-2.5 text-info flex-shrink-0" />}
-                  {geminiUp === false && <Zap className="h-2.5 w-2.5 text-warning flex-shrink-0" />}
+                  {geminiUp === false && <Zap       className="h-2.5 w-2.5 text-warning flex-shrink-0" />}
                 </div>
               </div>
-              <button onClick={clearChat} title="Clear chat"
-                className="rounded-md p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors">
+
+              <button
+                onClick={clearChat}
+                title="Clear chat"
+                className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+              >
                 <RotateCcw className="h-3.5 w-3.5" />
               </button>
-              <button onClick={() => setOpen(false)} title="Close"
-                className="rounded-md p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors">
+              <button
+                onClick={() => setOpen(false)}
+                title="Close"
+                className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+              >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
             {/* ── Region context strip ── */}
-            <div className="shrink-0 flex items-center gap-2 border-b border-border/40 bg-info/[0.05] px-4 py-1.5">
+            <div className="shrink-0 flex items-center gap-2 border-b border-border/40 bg-info/[0.04] px-4 py-1.5">
               <span className="text-[9px] font-bold uppercase tracking-widest text-info">Region</span>
               <span className="text-[10px] font-semibold text-foreground">{locationLabel}</span>
               <span className="ml-auto text-[9px] text-muted-foreground">
@@ -345,11 +365,12 @@ What do you need?`,
             </div>
 
             {/* ── Messages ── */}
-            <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2.5 scrollbar-hide">
+            <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2.5 scrollbar-thin">
               {messages.map(msg => (
-                <div key={msg.id}
-                  className={cn('flex gap-2', msg.role === 'user' ? 'justify-end' : 'justify-start')}>
-
+                <div
+                  key={msg.id}
+                  className={cn('flex gap-2 animate-slide-in-up', msg.role === 'user' ? 'justify-end' : 'justify-start')}
+                >
                   {msg.role === 'bot' && (
                     <div className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-info/15">
                       <Bot className="h-3.5 w-3.5 text-info" />
@@ -402,20 +423,23 @@ What do you need?`,
               <div ref={bottomRef} />
             </div>
 
-            {/* ── Suggested questions (only at start) ── */}
+            {/* ── Suggested questions ── */}
             {messages.length <= 1 && !loading && (
               <div className="shrink-0 border-t border-border/50 px-3 py-2.5">
-                <p className="mb-1.5 text-[9px] font-bold uppercase tracking-widest text-muted-foreground">
+                <p className="mb-2 text-[9px] font-bold uppercase tracking-widest text-muted-foreground">
                   Quick questions
                 </p>
                 <div className="flex flex-wrap gap-1.5">
                   {SUGGESTED_QUESTIONS.slice(0, 4).map(q => (
-                    <button key={q} onClick={() => send(q)}
+                    <button
+                      key={q}
+                      onClick={() => send(q)}
                       className={cn(
                         'rounded-full border border-border bg-secondary/40 px-2.5 py-1',
                         'text-[10px] font-medium text-foreground leading-tight',
-                        'hover:bg-secondary hover:border-info/40 transition-colors active:scale-95',
-                      )}>
+                        'hover:bg-secondary hover:border-info/35 transition-all active:scale-95',
+                      )}
+                    >
                       {q}
                     </button>
                   ))}
@@ -425,7 +449,10 @@ What do you need?`,
 
             {/* ── Input bar ── */}
             <div className="shrink-0 border-t border-border bg-card/95 px-3 py-3">
-              <form onSubmit={e => { e.preventDefault(); send(input); }} className="flex gap-2">
+              <form
+                onSubmit={e => { e.preventDefault(); send(input); }}
+                className="flex gap-2"
+              >
                 <input
                   ref={inputRef}
                   value={input}
@@ -435,27 +462,31 @@ What do you need?`,
                   className={cn(
                     'flex-1 min-w-0 rounded-xl border border-border bg-secondary/30 px-3 py-2',
                     'text-xs text-foreground placeholder:text-muted-foreground',
-                    'outline-none focus:border-info/50 focus:ring-1 focus:ring-info/20',
+                    'focus:outline-none focus:border-info/50 focus:ring-1 focus:ring-info/20',
                     'disabled:opacity-50 transition-colors',
                   )}
                 />
-                <button type="submit" disabled={!input.trim() || loading}
-                  aria-label="Send"
+                <button
+                  type="submit"
+                  disabled={!input.trim() || loading}
+                  aria-label="Send message"
                   className={cn(
                     'flex h-8 w-8 shrink-0 items-center justify-center rounded-xl',
                     'bg-info text-white transition-all active:scale-95',
                     'disabled:opacity-40 disabled:cursor-not-allowed hover:bg-info/90',
-                  )}>
+                  )}
+                >
                   {loading
                     ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
                     : <Send className="h-3.5 w-3.5" />
                   }
                 </button>
               </form>
+
               <p className="mt-1.5 text-center text-[9px] text-muted-foreground/50">
                 {geminiUp
                   ? '✦ Gemini AI · Verify critical info with local authorities'
-                  : '⚡ Offline mode · Full safety guidance · No internet needed'}
+                  : '⚡ Offline mode · Full safety guidance available'}
               </p>
             </div>
           </div>

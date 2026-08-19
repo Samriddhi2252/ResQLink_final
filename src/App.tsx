@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { TopNav } from '@/components/top-nav';
 import { StatusBanner } from '@/components/status-banner';
 import { MapView } from '@/components/map-view';
@@ -25,6 +25,13 @@ import { toast } from 'sonner';
 import type { NavDestination } from '@/hooks/use-navigation';
 
 import { useCrossDeviceSync } from '@/hooks/use-cross-device-sync';
+
+// ── P2P offline network ───────────────────────────────────────────────────────
+import { useP2PNetwork } from '@/hooks/use-p2p-network';
+import { OfflineNetworkPanel } from '@/components/offline-network-panel';
+import { P2PStatusBadge } from '@/components/p2p-status-badge';
+import type { P2PRecord } from '@/lib/p2p-db';
+import { computeExpiresAt } from '@/lib/p2p-db';
 
 function App() {
   const { status, toggle, isOnline } = useNetwork();
@@ -54,6 +61,113 @@ function App() {
     cancelHelpRequest: handleCancelHelp,
     restoreRequests: handleRestoreRequests,
   } = useCrossDeviceSync();
+
+  // ── P2P Offline Network ───────────────────────────────────────────────────
+  const [p2pPanelOpen, setP2PPanelOpen] = useState(false);
+
+  /**
+   * Called by the P2P hook whenever records arrive from a peer.
+   * Converts each P2PRecord into an AidRequest and feeds it into the
+   * existing addCustomRequest pipeline (localStorage + server sync).
+   * Deduplication is handled both in p2p-db (IndexedDB) and in
+   * useCrossDeviceSync (server-side version check).
+   */
+  const handleP2PRecordsReceived = useCallback((records: P2PRecord[]) => {
+    let newCount = 0;
+    for (const rec of records) {
+      if (!rec.payload || rec.status === 'RESOLVED' || rec.status === 'EXPIRED') continue;
+
+      const p = rec.payload;
+      // Map P2P record type → AidRequest category
+      const categoryMap: Record<string, RequestCategory> = {
+        MEDICAL: 'medical', FOOD: 'food', WATER: 'food',
+        SHELTER: 'shelter', RESCUE: 'rescue', VOLUNTEER: 'volunteers',
+        RESOURCE: 'rescue', STATUS_UPDATE: 'rescue',
+      };
+      const category: RequestCategory = categoryMap[rec.type] ?? 'rescue';
+
+      const aidReq: AidRequest = {
+        id:            rec.id,
+        category,
+        priority:      (p.priority as AidRequest['priority']) ?? 'urgent',
+        status:        'active',
+        title:         (p.title as string)        || `P2P: ${rec.type} Request`,
+        details:       (p.details as string)      || `Received via offline network (${rec.hopCount} hop${rec.hopCount !== 1 ? 's' : ''})`,
+        items:         Array.isArray(p.items) ? (p.items as string[]) : [],
+        contactName:   (p.contactName as string)  || 'P2P Relay',
+        contactPhone:  (p.contactPhone as string) || '',
+        distanceMiles: (p.distanceMiles as number) ?? 0,
+        createdAt:     rec.createdAt,
+        coords:        (p.coords as { x: number; y: number }) || { x: 50, y: 50 },
+        peopleCount:   (p.peopleCount as number)  ?? 1,
+        isUserCreated: false,
+        region:        (p.region as RegionKey)    || 'ncr',
+      };
+
+      addCustomRequest(aidReq);
+      newCount++;
+    }
+
+    if (newCount > 0) {
+      toast.success(`📡 ${newCount} record${newCount !== 1 ? 's' : ''} received via Offline Network`, {
+        description: 'Emergency data relayed from a nearby ResQLinkk device.',
+        duration: 4000,
+      });
+    }
+  }, [addCustomRequest]);
+
+  /**
+   * Called by the P2P hook when internet returns.
+   * Pushes all locally-held P2P records to the backend via the existing
+   * addCustomRequest pipeline, which already handles server deduplication.
+   */
+  const handleP2PSyncToBackend = useCallback((records: P2PRecord[]) => {
+    for (const rec of records) {
+      if (!rec.payload || rec.status === 'RESOLVED' || rec.status === 'EXPIRED') continue;
+      const p = rec.payload;
+      const categoryMap: Record<string, RequestCategory> = {
+        MEDICAL: 'medical', FOOD: 'food', WATER: 'food',
+        SHELTER: 'shelter', RESCUE: 'rescue', VOLUNTEER: 'volunteers',
+        RESOURCE: 'rescue', STATUS_UPDATE: 'rescue',
+      };
+      const category: RequestCategory = categoryMap[rec.type] ?? 'rescue';
+      const aidReq: AidRequest = {
+        id:            rec.id,
+        category,
+        priority:      (p.priority as AidRequest['priority']) ?? 'urgent',
+        status:        'active',
+        title:         (p.title as string) || `P2P: ${rec.type} Request`,
+        details:       (p.details as string) || 'Received via offline P2P network',
+        items:         Array.isArray(p.items) ? (p.items as string[]) : [],
+        contactName:   (p.contactName as string)  || 'P2P Relay',
+        contactPhone:  (p.contactPhone as string) || '',
+        distanceMiles: (p.distanceMiles as number) ?? 0,
+        createdAt:     rec.createdAt,
+        coords:        (p.coords as { x: number; y: number }) || { x: 50, y: 50 },
+        peopleCount:   (p.peopleCount as number) ?? 1,
+        isUserCreated: false,
+        region:        (p.region as RegionKey) || 'ncr',
+      };
+      addCustomRequest(aidReq);
+    }
+  }, [addCustomRequest]);
+
+  const {
+    phase:          p2pPhase,
+    peers:          p2pPeers,
+    connectedCount: p2pConnectedCount,
+    stats:          p2pStats,
+    recordCount:    p2pRecordCount,
+    errorMessage:   p2pError,
+    deviceId:       p2pDeviceId,
+    deviceAlias:    p2pDeviceAlias,
+    syncNow:        p2pSyncNow,
+    publishRecord:  p2pPublishRecord,
+  } = useP2PNetwork({
+    isOnline,
+    onRecordsReceived: handleP2PRecordsReceived,
+    onSyncToBackend:   handleP2PSyncToBackend,
+  });
 
   // ── All data is derived from the selected region ──────────────────────────
   const regionKey   = region === 'ncr' ? 'ncr' : 'badrinath';
@@ -150,6 +264,44 @@ function App() {
 
     addCustomRequest(newAidRequest);
 
+    // ── Also publish into the P2P offline network ─────────────────────────
+    // Map AidRequest fields into a P2PRecord so it can be store-and-forwarded
+    // to nearby devices even when the internet is down.
+    const p2pType = ({
+      medical:    'MEDICAL',
+      food:       'FOOD',
+      shelter:    'SHELTER',
+      volunteers: 'VOLUNTEER',
+      rescue:     'RESCUE',
+    } as const)[newAidRequest.category] ?? 'RESCUE';
+
+    p2pPublishRecord({
+      id:             newAidRequest.id,
+      type:           p2pType,
+      version:        1,
+      createdAt:      newAidRequest.createdAt,
+      updatedAt:      newAidRequest.createdAt,
+      expiresAt:      computeExpiresAt(p2pType, newAidRequest.createdAt),
+      status:         'OPEN',
+      sourceDeviceId: p2pDeviceId,
+      payload: {
+        title:         newAidRequest.title,
+        details:       newAidRequest.details,
+        category:      newAidRequest.category,
+        priority:      newAidRequest.priority,
+        contactName:   newAidRequest.contactName,
+        contactPhone:  newAidRequest.contactPhone,
+        distanceMiles: newAidRequest.distanceMiles,
+        coords:        newAidRequest.coords,
+        peopleCount:   newAidRequest.peopleCount,
+        items:         newAidRequest.items,
+        region:        newAidRequest.region,
+        isUserCreated: true,
+        createdAt:     newAidRequest.createdAt,
+        id:            newAidRequest.id,
+      },
+    }).catch(() => {}); // non-fatal if IDB unavailable
+
     setSelectedId(newAidRequest.id);
 
     if (!isOnline) {
@@ -196,6 +348,23 @@ function App() {
         onTriage={() => setTriageOpen(true)}
       />
 
+      {/* ── P2P offline network status bar ── */}
+      <div className="w-full border-b border-border bg-card/40 px-3 py-1.5 sm:px-6">
+        <div className="mx-auto flex max-w-[1600px] items-center justify-between gap-3">
+          <p className="text-[10px] text-muted-foreground hidden sm:block">
+            Peer-to-peer offline mesh · LAN WebRTC · Store &amp; Forward
+          </p>
+          <div className="flex items-center gap-2 ml-auto">
+            <P2PStatusBadge
+              phase={p2pPhase}
+              connectedCount={p2pConnectedCount}
+              peerCount={p2pPeers.length}
+              onClick={() => setP2PPanelOpen(true)}
+            />
+          </div>
+        </div>
+      </div>
+
       <StatusBanner
         activeFilter={filter}
         onFilterChange={setFilter}
@@ -205,11 +374,12 @@ function App() {
       />
 
       {/* Main content */}
-      <main className="mx-auto w-full max-w-[1600px] flex-1 px-3 py-3 sm:px-6 sm:py-4">
+      <main className="mx-auto w-full max-w-[1600px] flex-1 px-3 py-3 sm:px-4 sm:py-4 lg:px-6">
 
-        {/* Desktop: 2-column grid */}
-        <div className="hidden gap-4 lg:grid lg:grid-cols-[1.4fr_1fr]">
-          <div className="h-[calc(100vh-210px)] min-h-[500px]">
+        {/* Desktop: 2-column grid — map takes dominant space */}
+        <div className="hidden gap-4 lg:grid lg:grid-cols-[1.45fr_1fr]">
+          {/* Map panel */}
+          <div className="h-[calc(100vh-230px)] min-h-[520px] overflow-hidden rounded-2xl border border-border shadow-lg">
             <MapView
               requests={requests}
               shelters={shelters}
@@ -222,7 +392,9 @@ function App() {
               navDestination={navDest}
             />
           </div>
-          <div className="h-[calc(100vh-210px)] min-h-[500px] overflow-hidden rounded-xl border border-border bg-card">
+
+          {/* Response panel */}
+          <div className="h-[calc(100vh-230px)] min-h-[520px] overflow-hidden rounded-2xl border border-border bg-card shadow-lg">
             <LiveFeed
               requests={requests}
               filter={filter}
@@ -247,7 +419,7 @@ function App() {
         {/* Mobile & Tablet: tabbed view */}
         <div className="lg:hidden">
           {mobileTab === 'map' && (
-            <div className="h-[calc(100dvh-250px)] min-h-[380px]">
+            <div className="h-[calc(100dvh-260px)] min-h-[360px] overflow-hidden rounded-2xl border border-border shadow-md">
               <MapView
                 requests={requests}
                 shelters={shelters}
@@ -262,7 +434,7 @@ function App() {
             </div>
           )}
           {mobileTab === 'feed' && (
-            <div className="h-[calc(100dvh-250px)] min-h-[380px] overflow-hidden rounded-xl border border-border bg-card">
+            <div className="h-[calc(100dvh-260px)] min-h-[360px] overflow-hidden rounded-2xl border border-border bg-card shadow-md">
               <LiveFeed
                 requests={requests}
                 filter={filter}
@@ -284,52 +456,106 @@ function App() {
             </div>
           )}
           {mobileTab === 'shelters' && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pb-4">
-              <div className="sm:col-span-2 rounded-xl border border-border bg-card p-4">
-                <div className="flex items-center justify-between text-xs sm:text-sm">
-                  <span className="font-semibold">Regional Capacity</span>
-                  <span className="font-bold text-success">
-                    {shelters.reduce((s, sh) => s + sh.occupied, 0)}/
-                    {shelters.reduce((s, sh) => s + sh.capacity, 0)}
-                  </span>
+            <div className="space-y-3 pb-4 animate-slide-in-up">
+              {/* Capacity summary card */}
+              <div className="rounded-2xl border border-border bg-card p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Regional Shelter Capacity</p>
+                    <p className="mt-0.5 text-sm font-bold text-foreground">
+                      {shelters.reduce((s, sh) => s + sh.occupied, 0)} occupied
+                      <span className="text-muted-foreground font-normal"> / {shelters.reduce((s, sh) => s + sh.capacity, 0)} total</span>
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-2xl font-extrabold text-success">
+                      {shelters.reduce((s, sh) => s + sh.capacity - sh.occupied, 0)}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">beds free</p>
+                  </div>
+                </div>
+                {/* Overall bar */}
+                <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-secondary">
+                  <div
+                    className="h-full rounded-full bg-success transition-all"
+                    style={{
+                      width: `${Math.round(
+                        (shelters.reduce((s, sh) => s + sh.occupied, 0) /
+                          Math.max(1, shelters.reduce((s, sh) => s + sh.capacity, 0))) * 100
+                      )}%`,
+                    }}
+                  />
                 </div>
               </div>
-              {shelters.map((s) => {
-                const pct    = Math.round((s.occupied / s.capacity) * 100);
-                const isFull = s.status === 'full';
-                return (
-                  <div key={s.id} className="rounded-xl border border-border bg-card p-4">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <h3 className="text-sm font-bold leading-tight break-words">{s.name}</h3>
-                        <p className="text-xs text-muted-foreground break-words">{s.address}</p>
-                      </div>
-                      <span className={cn('shrink-0 text-[10px] font-bold uppercase', isFull ? 'text-alert' : 'text-success')}>
-                        {isFull ? 'FULL' : 'OPEN'}
-                      </span>
-                    </div>
-                    <div className="mt-2 flex items-center justify-between text-xs">
-                      <span className="font-semibold">{s.occupied}/{s.capacity} beds</span>
-                      <span className={isFull ? 'text-alert' : 'text-success'}>{pct}%</span>
-                    </div>
-                    <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-secondary">
-                      <div className={`h-full rounded-full ${isFull ? 'bg-alert' : 'bg-success'}`} style={{ width: `${pct}%` }} />
-                    </div>
-                    <button
-                      onClick={() => handleNavigate({
-                        id: s.id,
-                        name: s.name,
-                        address: s.address,
-                        coords: [s.coords.y, s.coords.x] as [number, number],
-                        type: 'shelter',
-                      })}
-                      className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg border border-border bg-secondary/40 py-2 text-xs font-bold transition-colors hover:bg-secondary active:scale-[0.99]"
+
+              {/* Shelter cards grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {shelters.map((s) => {
+                  const pct    = Math.round((s.occupied / s.capacity) * 100);
+                  const isFull = s.status === 'full';
+                  const isWarn = !isFull && pct > 75;
+                  return (
+                    <div
+                      key={s.id}
+                      className={cn(
+                        'rounded-2xl border bg-card p-4 transition-colors',
+                        isFull ? 'border-alert/30' : isWarn ? 'border-warning/25' : 'border-border',
+                      )}
                     >
-                      <Navigation className="h-3.5 w-3.5 text-info" /> Get Directions
-                    </button>
-                  </div>
-                );
-              })}
+                      {/* Header */}
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <h3 className="text-sm font-bold leading-tight break-words">{s.name}</h3>
+                          <p className="mt-0.5 text-xs text-muted-foreground break-words leading-relaxed">{s.address}</p>
+                        </div>
+                        <span className={cn(
+                          'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase',
+                          isFull
+                            ? 'bg-alert/[12%] text-alert border border-alert/25'
+                            : 'bg-success/[12%] text-success border border-success/25',
+                        )}>
+                          {isFull ? 'Full' : 'Open'}
+                        </span>
+                      </div>
+
+                      {/* Capacity */}
+                      <div className="mt-3">
+                        <div className="flex items-center justify-between text-xs mb-1.5">
+                          <span className="font-semibold text-foreground">{s.occupied}/{s.capacity} beds</span>
+                          <span className={cn('font-bold', isFull ? 'text-alert' : isWarn ? 'text-warning' : 'text-success')}>
+                            {pct}%
+                          </span>
+                        </div>
+                        <div className="h-1.5 overflow-hidden rounded-full bg-secondary">
+                          <div
+                            className={cn('h-full rounded-full transition-all', isFull ? 'bg-alert' : isWarn ? 'bg-warning' : 'bg-success')}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Directions button */}
+                      <button
+                        onClick={() => handleNavigate({
+                          id: s.id,
+                          name: s.name,
+                          address: s.address,
+                          coords: [s.coords.y, s.coords.x] as [number, number],
+                          type: 'shelter',
+                        })}
+                        className={cn(
+                          'mt-3 flex w-full items-center justify-center gap-2 rounded-xl py-2.5',
+                          'border border-border bg-secondary/40 text-xs font-bold',
+                          'hover:bg-secondary transition-colors active:scale-[0.98]',
+                        )}
+                      >
+                        <Navigation className="h-3.5 w-3.5 text-info" />
+                        Get Directions
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>
@@ -396,6 +622,22 @@ function App() {
         resources={resources}
         requests={requests}
         isOnline={isOnline}
+      />
+
+      {/* ── Offline Network Panel ── */}
+      <OfflineNetworkPanel
+        open={p2pPanelOpen}
+        onOpenChange={setP2PPanelOpen}
+        phase={p2pPhase}
+        peers={p2pPeers}
+        connectedCount={p2pConnectedCount}
+        stats={p2pStats}
+        recordCount={p2pRecordCount}
+        errorMessage={p2pError}
+        deviceId={p2pDeviceId}
+        deviceAlias={p2pDeviceAlias}
+        isOnline={isOnline}
+        onSyncNow={p2pSyncNow}
       />
 
       <div className="h-20 pb-[max(0.5rem,env(safe-area-inset-bottom))] lg:hidden" />

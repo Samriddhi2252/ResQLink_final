@@ -4,12 +4,11 @@ import {
   Navigation, Clock, MapPin, PersonStanding, CheckCircle2,
   CloudOff, Trash2, RefreshCw, AlertTriangle, ChevronRight,
   Brain, X, ShieldAlert, Users2, Flame, Mountain, Building2,
-  Phone, ExternalLink, Copy, Check, ArrowLeft,
+  Phone, ExternalLink, Copy, Check, ArrowLeft, Zap,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn, buildGoogleMapsUrl } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Input } from '@/components/ui/input';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -29,16 +28,16 @@ import type { NavDestination } from '@/hooks/use-navigation';
 import { useModalBack } from '@/hooks/use-modal-back';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Priority configuration (for AI triage priorities)
+// Priority configuration (AI triage)
 // ─────────────────────────────────────────────────────────────────────────────
 type TriagePriority = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
 
 const TRIAGE_PRIORITY_META: Record<TriagePriority, {
   label: string; bg: string; text: string; border: string; ring: string;
 }> = {
-  CRITICAL: { label: 'CRITICAL', bg: 'bg-alert/15',   text: 'text-alert',   border: 'border-alert/40',   ring: 'ring-alert/30' },
+  CRITICAL: { label: 'CRITICAL', bg: 'bg-alert/15',   text: 'text-alert',   border: 'border-alert/40',   ring: 'ring-alert/30'   },
   HIGH:     { label: 'HIGH',     bg: 'bg-warning/15',  text: 'text-warning', border: 'border-warning/40', ring: 'ring-warning/30' },
-  MEDIUM:   { label: 'MEDIUM',   bg: 'bg-info/15',     text: 'text-info',    border: 'border-info/40',    ring: 'ring-info/30' },
+  MEDIUM:   { label: 'MEDIUM',   bg: 'bg-info/15',     text: 'text-info',    border: 'border-info/40',    ring: 'ring-info/30'    },
   LOW:      { label: 'LOW',      bg: 'bg-success/15',  text: 'text-success', border: 'border-success/40', ring: 'ring-success/30' },
 };
 
@@ -47,13 +46,13 @@ const PRIORITY_ORDER: Record<TriagePriority, number> = {
 };
 
 const INCIDENT_ICON: Record<string, React.ReactNode> = {
-  Flood:               <Droplets   className="h-3.5 w-3.5" />,
-  Fire:                <Flame      className="h-3.5 w-3.5" />,
-  Earthquake:          <Building2  className="h-3.5 w-3.5" />,
-  Landslide:           <Mountain   className="h-3.5 w-3.5" />,
-  'Medical Emergency': <HeartPulse className="h-3.5 w-3.5" />,
+  Flood:               <Droplets      className="h-3.5 w-3.5" />,
+  Fire:                <Flame         className="h-3.5 w-3.5" />,
+  Earthquake:          <Building2     className="h-3.5 w-3.5" />,
+  Landslide:           <Mountain      className="h-3.5 w-3.5" />,
+  'Medical Emergency': <HeartPulse    className="h-3.5 w-3.5" />,
   Trapped:             <AlertTriangle className="h-3.5 w-3.5" />,
-  'Building Collapse': <Building2  className="h-3.5 w-3.5" />,
+  'Building Collapse': <Building2     className="h-3.5 w-3.5" />,
   Unknown:             <AlertTriangle className="h-3.5 w-3.5" />,
 };
 
@@ -61,8 +60,11 @@ const INCIDENT_ICON: Record<string, React.ReactNode> = {
 // Props
 // ─────────────────────────────────────────────────────────────────────────────
 const ICON_MAP: Record<RequestCategory, typeof HeartPulse> = {
-  medical: HeartPulse, food: Droplets, shelter: BedDouble,
-  volunteers: Users, rescue: LifeBuoy,
+  medical:    HeartPulse,
+  food:       Droplets,
+  shelter:    BedDouble,
+  volunteers: Users,
+  rescue:     LifeBuoy,
 };
 
 export function computeRequestCoords(request: AidRequest, region: string = 'ncr'): [number, number] {
@@ -123,13 +125,10 @@ function TriageDetailModal({
     if (t.vulnerable.injured  > 0) vulnList.push(`${t.vulnerable.injured} Injured`);
   }
 
-  // Parse GPS coords string → [lat, lng] if available
   const parsedCoords = ((): [number, number] | null => {
     if (!item.coords) return null;
     const parts = item.coords.split(',').map(s => parseFloat(s.trim()));
-    if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
-      return [parts[0], parts[1]];
-    }
+    if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) return [parts[0], parts[1]];
     return null;
   })();
 
@@ -151,30 +150,29 @@ function TriageDetailModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-2 sm:p-4">
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/65 backdrop-blur-sm" onClick={onClose} />
 
-      {/* Modal */}
       <div className="relative z-10 w-full max-w-md max-h-[90dvh] overflow-y-auto
         rounded-2xl border border-border bg-card shadow-2xl animate-float-up">
 
         {/* Header */}
-        <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-border
-          bg-card/95 px-3.5 py-2.5 sm:px-4 sm:py-3 backdrop-blur-md">
+        <div className="sticky top-0 z-10 flex items-center gap-2.5 border-b border-border
+          bg-card/95 px-4 py-3 backdrop-blur-md">
           <button
             type="button"
             onClick={onClose}
-            className="flex items-center gap-1 rounded-lg border border-border bg-secondary/50 px-2 py-1 text-xs font-bold text-foreground hover:bg-secondary active:scale-95 transition-all mr-0.5"
+            className="flex items-center gap-1 rounded-lg border border-border bg-secondary/50
+              px-2.5 py-1.5 text-xs font-bold hover:bg-secondary active:scale-95 transition-all"
             aria-label="Go back"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
-            <span>Back</span>
+            Back
           </button>
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-alert/15">
             <Brain className="h-4 w-4 text-alert" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-bold uppercase tracking-widest text-alert">AI Triage Analysis</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-alert">AI Triage Analysis</p>
             <p className="text-[10px] text-muted-foreground">{timeAgo(item.createdAt)} · {item.location || 'Location unknown'}</p>
           </div>
           <button onClick={onClose}
@@ -184,14 +182,13 @@ function TriageDetailModal({
         </div>
 
         <div className="p-4 space-y-4">
-
           {/* Priority banner */}
           {prioMeta ? (
-            <div className={cn('rounded-xl border p-3 flex items-center gap-3', prioMeta.bg, prioMeta.border)}>
+            <div className={cn('rounded-xl border p-3.5 flex items-center gap-3', prioMeta.bg, prioMeta.border)}>
               <AlertTriangle className={cn('h-5 w-5 shrink-0', prioMeta.text)} />
               <div>
                 <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">Priority</p>
-                <p className={cn('text-xl font-extrabold leading-tight', prioMeta.text)}>{t!.priority}</p>
+                <p className={cn('text-2xl font-extrabold leading-tight', prioMeta.text)}>{t!.priority}</p>
               </div>
               <div className="ml-auto text-right">
                 <p className="text-[9px] text-muted-foreground">Parsed by</p>
@@ -208,7 +205,6 @@ function TriageDetailModal({
 
           {t && (
             <>
-              {/* Incident details grid */}
               <div className="grid grid-cols-2 gap-3">
                 <DetailBlock label="Incident Type">
                   <div className="flex items-center gap-1.5 text-sm font-bold">
@@ -222,22 +218,16 @@ function TriageDetailModal({
                       <p className="text-sm font-bold">{item.location || 'See coordinates'}</p>
                       <div className="flex flex-wrap gap-1.5">
                         {onNavigate && (
-                          <button
-                            onClick={handleViewOnMap}
+                          <button onClick={handleViewOnMap}
                             className="flex items-center gap-1 rounded-md border border-info/30 bg-info/10
-                              px-2 py-1 text-[10px] font-semibold text-info hover:bg-info/20 transition-colors"
-                          >
+                              px-2 py-1 text-[10px] font-semibold text-info hover:bg-info/20 transition-colors">
                             <MapPin className="h-3 w-3" /> View on Map
                           </button>
                         )}
                         {googleMapsUrl && (
-                          <a
-                            href={googleMapsUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                          <a href={googleMapsUrl} target="_blank" rel="noopener noreferrer"
                             className="flex items-center gap-1 rounded-md border border-border bg-secondary/40
-                              px-2 py-1 text-[10px] font-semibold text-foreground hover:bg-secondary transition-colors"
-                          >
+                              px-2 py-1 text-[10px] font-semibold text-foreground hover:bg-secondary transition-colors">
                             <ExternalLink className="h-3 w-3" /> Google Maps ↗
                           </a>
                         )}
@@ -264,7 +254,6 @@ function TriageDetailModal({
                 </DetailBlock>
               </div>
 
-              {/* Danger indicators */}
               {t.dangerIndicators.length > 0 && (
                 <DetailBlock label="Danger Details">
                   <div className="flex flex-wrap gap-1">
@@ -278,14 +267,12 @@ function TriageDetailModal({
                 </DetailBlock>
               )}
 
-              {/* Priority reasons */}
               {t.priorityReasons.length > 0 && (
                 <DetailBlock label="AI Priority Reasons">
                   <ul className="space-y-1">
                     {t.priorityReasons.map((r, i) => (
                       <li key={i} className="flex items-start gap-1.5 text-xs">
-                        <ChevronRight className={cn('h-3.5 w-3.5 mt-0.5 shrink-0',
-                          prioMeta?.text ?? 'text-muted-foreground')} />
+                        <ChevronRight className={cn('h-3.5 w-3.5 mt-0.5 shrink-0', prioMeta?.text ?? 'text-muted-foreground')} />
                         {r}
                       </li>
                     ))}
@@ -293,7 +280,6 @@ function TriageDetailModal({
                 </DetailBlock>
               )}
 
-              {/* Required resources */}
               {t.requiredResources.length > 0 && (
                 <DetailBlock label="Required Resources">
                   <div className="flex flex-wrap gap-1.5">
@@ -309,7 +295,6 @@ function TriageDetailModal({
             </>
           )}
 
-          {/* Contact info */}
           {item.contact && (
             <DetailBlock label="Contact">
               <div className="flex items-center gap-1.5 text-xs font-medium">
@@ -320,21 +305,18 @@ function TriageDetailModal({
             </DetailBlock>
           )}
 
-          {/* GPS coords */}
           {item.coords && (
             <DetailBlock label="GPS Coordinates">
               <p className="font-mono text-xs text-foreground">{item.coords}</p>
             </DetailBlock>
           )}
 
-          {/* Original message */}
           <DetailBlock label="Original User Message">
             <blockquote className="border-l-2 border-alert/40 pl-3 text-xs italic text-muted-foreground leading-relaxed">
               "{t?.rawMessage || item.details}"
             </blockquote>
           </DetailBlock>
 
-          {/* Region tag */}
           <div className="flex items-center gap-2 pt-1">
             <span className="rounded-full border border-border bg-secondary/40 px-2.5 py-1 text-[10px] font-medium text-muted-foreground">
               📍 {item.location || 'Region unknown'}
@@ -363,7 +345,7 @@ function DetailBlock({ label, children }: { label: string; children: React.React
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Queue item row — compact responder card
+// Queue item row
 // ─────────────────────────────────────────────────────────────────────────────
 function QueueItem({
   item,
@@ -379,19 +361,17 @@ function QueueItem({
 
   return (
     <div className="space-y-1">
-      {/* Main clickable card — no nested buttons */}
       <button
         type="button"
         onClick={onViewDetails}
         className={cn(
-          'w-full text-left rounded-xl border p-2.5 transition-all hover:shadow-md active:scale-[0.99]',
+          'w-full text-left rounded-xl border p-3 transition-all hover:shadow-md active:scale-[0.99]',
           prioMeta
             ? cn(prioMeta.bg, prioMeta.border, 'hover:opacity-90')
             : 'bg-card border-border hover:bg-secondary/40',
         )}
       >
         <div className="flex items-start gap-2.5">
-          {/* Priority badge */}
           <div className="flex flex-col items-center gap-1 shrink-0 mt-0.5">
             {prioMeta ? (
               <span className={cn(
@@ -407,7 +387,6 @@ function QueueItem({
           </div>
 
           <div className="min-w-0 flex-1">
-            {/* Incident type + people */}
             <div className="flex items-center gap-1.5 flex-wrap">
               {t && (
                 <span className="flex items-center gap-1 text-[11px] font-bold text-foreground">
@@ -421,14 +400,10 @@ function QueueItem({
                 </span>
               )}
             </div>
-
-            {/* Location */}
             <p className="mt-0.5 text-[10px] text-muted-foreground truncate">
               <MapPin className="inline h-2.5 w-2.5 mr-0.5" />
               {item.location || item.details?.slice(0, 40) || item.category}
             </p>
-
-            {/* Vulnerable summary */}
             {t && Object.values(t.vulnerable).some(v => v > 0) && (
               <div className="mt-1 flex flex-wrap gap-1">
                 {t.vulnerable.elderly  > 0 && <span className="text-[9px] font-semibold text-warning bg-warning/10 border border-warning/20 rounded px-1 py-0.5">{t.vulnerable.elderly} Elderly</span>}
@@ -439,7 +414,6 @@ function QueueItem({
             )}
           </div>
 
-          {/* Timestamp + chevron */}
           <div className="shrink-0 flex flex-col items-end gap-1">
             <span className="text-[9px] text-muted-foreground">{timeAgo(item.createdAt)}</span>
             <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
@@ -447,7 +421,7 @@ function QueueItem({
         </div>
       </button>
 
-      {/* Resolve button — sibling to the card, NOT nested inside it */}
+      {/* Resolve button — sibling, NOT nested inside card */}
       <AlertDialog>
         <AlertDialogTrigger asChild>
           <button
@@ -494,7 +468,7 @@ export function LiveFeed({
   selectedId, onSelect, locationLabel = 'Delhi NCR', onNavigate, region = 'ncr',
   onResolveRequest, onHelpRequest, onCancelHelp, onRestoreRequests,
 }: LiveFeedProps) {
-  const [search, setSearch]           = useState('');
+  const [search, setSearch]               = useState('');
   const [selectedQueue, setSelectedQueue] = useState<QueuedRequest | null>(null);
   const [helpingRequest, setHelpingRequest] = useState<AidRequest | null>(null);
 
@@ -502,26 +476,23 @@ export function LiveFeed({
     if (filter !== 'all' && r.category !== filter) return false;
     if (search) {
       const q = search.toLowerCase();
-      return r.title.toLowerCase().includes(q) ||
-             r.details.toLowerCase().includes(q) ||
+      return r.title.toLowerCase().includes(q)       ||
+             r.details.toLowerCase().includes(q)     ||
              r.contactName.toLowerCase().includes(q) ||
-             r.contactPhone.toLowerCase().includes(q) ||
+             r.contactPhone.toLowerCase().includes(q)||
              r.items.some((i) => i.toLowerCase().includes(q));
     }
     return true;
   });
 
   const sorted = [...filtered].sort((a, b) => {
-    // Put user-created SOS requests at the very top!
     if (a.isUserCreated && !b.isUserCreated) return -1;
     if (!a.isUserCreated && b.isUserCreated) return 1;
-
     const order = { critical: 0, urgent: 1, moderate: 2 };
     if (order[a.priority] !== order[b.priority]) return order[a.priority] - order[b.priority];
     return a.distanceMiles - b.distanceMiles;
   });
 
-  // Sort queue by triage priority, then by timestamp descending
   const sortedQueue = [...queue].sort((a, b) => {
     const pa = a.triage?.priority;
     const pb = b.triage?.priority;
@@ -537,58 +508,75 @@ export function LiveFeed({
     <>
       <div className="flex h-full flex-col">
 
-        {/* Search bar */}
-        <div className="border-b border-border p-3">
+        {/* ── Panel header ── */}
+        <div className="shrink-0 border-b border-border px-4 py-3">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h2 className="text-sm font-bold text-foreground">Response Feed</h2>
+              <p className="text-[10px] text-muted-foreground mt-0.5">
+                <MapPin className="inline h-2.5 w-2.5 mr-0.5 text-info" />
+                {locationLabel} · {sorted.length} active request{sorted.length !== 1 ? 's' : ''}
+              </p>
+            </div>
+            {/* Online/offline pill */}
+            <span className={cn(
+              'flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-semibold',
+              isOnline
+                ? 'border-success/25 bg-success/10 text-success'
+                : 'border-warning/25 bg-warning/10 text-warning',
+            )}>
+              <span className={cn('h-1.5 w-1.5 rounded-full', isOnline ? 'bg-success animate-pulse' : 'bg-warning')} />
+              {isOnline ? 'Live' : 'Offline'}
+            </span>
+          </div>
+
+          {/* Search bar */}
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
+            <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+            <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search requests, names, phones, items..."
-              className="border-border bg-secondary/30 pl-9"
+              placeholder="Search requests, names, phones…"
+              className={cn(
+                'w-full rounded-xl border border-border bg-secondary/30 pl-9 pr-3 py-2',
+                'text-xs text-foreground placeholder:text-muted-foreground',
+                'focus:outline-none focus:border-info/50 focus:ring-1 focus:ring-info/20',
+                'transition-colors',
+              )}
             />
-          </div>
-          <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
-            <span className="flex items-center gap-1">
-              <MapPin className="h-3 w-3 text-info" /> Within 2-mile radius
-            </span>
-            <span className="font-semibold text-foreground">{sorted.length} requests</span>
           </div>
         </div>
 
-        {/* ── Emergency Queue (responder dashboard) ── */}
+        {/* ── Emergency Queue ── */}
         {queueCount > 0 && (
-          <div className="border-b border-border bg-alert/[0.04] px-3 py-3">
-            {/* Header */}
-            <div className="flex items-center justify-between mb-2">
+          <div className="shrink-0 border-b border-border bg-alert/[0.04] px-4 py-3">
+            <div className="flex items-center justify-between mb-2.5">
               <div className="flex items-center gap-2">
-                <span className="relative flex h-5 w-5 items-center justify-center rounded-full bg-alert/20">
+                <div className="relative flex h-6 w-6 items-center justify-center rounded-full bg-alert/15">
                   {isOnline
                     ? <RefreshCw className="h-3 w-3 animate-spin text-success" />
                     : <CloudOff className="h-3 w-3 text-warning" />
                   }
-                </span>
+                </div>
                 <div>
                   <p className="text-xs font-bold text-alert flex items-center gap-1">
                     <AlertTriangle className="h-3 w-3" />
                     Emergency Queue · {queueCount} active
                   </p>
                   <p className="text-[10px] text-muted-foreground">
-                    {isOnline ? 'Syncing to response network…' : 'Offline — will sync when connected'}
-                    {' · Click any item for full triage details'}
+                    {isOnline ? 'Syncing to network…' : 'Offline — syncs on reconnect'}
+                    {' · Tap for full triage'}
                   </p>
                 </div>
               </div>
               <button
                 onClick={onClearQueue}
-                className="flex items-center gap-1 rounded-md border border-border px-2 py-1
-                  text-[10px] font-medium text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+                className="flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5
+                  text-[10px] font-semibold text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
               >
                 <Trash2 className="h-3 w-3" /> Clear
               </button>
             </div>
-
-            {/* Priority-sorted queue items */}
             <div className="space-y-1.5">
               {sortedQueue.map((q) => (
                 <QueueItem
@@ -602,19 +590,25 @@ export function LiveFeed({
           </div>
         )}
 
-        {/* Feed list */}
+        {/* ── Request list ── */}
         <ScrollArea className="flex-1">
           <div className="space-y-2.5 p-3">
             {sorted.length === 0 ? (
+              /* Empty state */
               <div className="flex flex-col items-center justify-center py-16 text-center px-4">
-                <CheckCircle2 className="h-10 w-10 text-success/40" />
-                <p className="mt-3 text-sm font-medium text-muted-foreground">No active requests in this category</p>
-                <p className="text-xs text-muted-foreground/70 mt-0.5">Try a different category or search term</p>
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-secondary border border-border mb-4">
+                  <CheckCircle2 className="h-7 w-7 text-success/50" />
+                </div>
+                <p className="text-sm font-semibold text-foreground">No active requests</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {search ? 'Try a different search term' : 'No requests in this category'}
+                </p>
                 {onRestoreRequests && (
                   <button
                     type="button"
                     onClick={onRestoreRequests}
-                    className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-border bg-secondary/50 px-3 py-1.5 text-xs font-bold text-foreground hover:bg-secondary active:scale-95 transition-all shadow-sm"
+                    className="mt-5 inline-flex items-center gap-1.5 rounded-xl border border-border bg-secondary/50
+                      px-4 py-2 text-xs font-bold hover:bg-secondary active:scale-95 transition-all shadow-sm"
                   >
                     <RefreshCw className="h-3.5 w-3.5" /> Restore Cleared Requests
                   </button>
@@ -648,7 +642,7 @@ export function LiveFeed({
         />
       )}
 
-      {/* Responder / I Can Help Modal */}
+      {/* Responder modal */}
       {helpingRequest && (
         <HelpOfferModal
           request={helpingRequest}
@@ -666,7 +660,7 @@ export function LiveFeed({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// HelpOfferModal ("I Can Help" Responder Modal)
+// HelpOfferModal ("I Can Help")
 // ─────────────────────────────────────────────────────────────────────────────
 function HelpOfferModal({
   request,
@@ -692,16 +686,14 @@ function HelpOfferModal({
   const [copied, setCopied] = useState(false);
   const [selectedItems, setSelectedItems] = useState<Record<string, boolean>>(() => {
     const init: Record<string, boolean> = {};
-    request.items.forEach((item) => {
-      init[item] = true;
-    });
+    request.items.forEach((item) => { init[item] = true; });
     return init;
   });
   const [committed, setCommitted] = useState(request.status === 'in-progress');
 
-  const meta = CATEGORY_META[request.category];
-  const Icon = ICON_MAP[request.category] || HeartPulse;
-  const prio = PRIORITY_META[request.priority];
+  const meta   = CATEGORY_META[request.category];
+  const Icon   = ICON_MAP[request.category] || HeartPulse;
+  const prio   = PRIORITY_META[request.priority];
   const coords = computeRequestCoords(request, region);
   const googleMapsUrl = buildGoogleMapsUrl({ coords, query: locationLabel });
 
@@ -709,9 +701,7 @@ function HelpOfferModal({
     if (!request.contactPhone) return;
     navigator.clipboard.writeText(request.contactPhone.replace(/\s+/g, '')).then(() => {
       setCopied(true);
-      toast.success('Phone number copied to clipboard', {
-        description: request.contactPhone,
-      });
+      toast.success('Phone number copied to clipboard', { description: request.contactPhone });
       setTimeout(() => setCopied(false), 2000);
     });
   };
@@ -732,91 +722,86 @@ function HelpOfferModal({
 
   const handleConfirmHelpAndResolve = () => {
     setCommitted(true);
-    if (onResolve) {
-      onResolve(request.id);
-    }
+    if (onResolve) onResolve(request.id);
     toast.success('🤝 Help Confirmed & Request Resolved!', {
-      description: `Emergency request for ${request.contactName} (${request.contactPhone}) marked as resolved and removed from queue. Starting route...`,
+      description: `Emergency request for ${request.contactName} (${request.contactPhone}) marked as resolved. Starting route...`,
     });
-    setTimeout(() => {
-      handleStartNavigation();
-    }, 600);
+    setTimeout(() => { handleStartNavigation(); }, 600);
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-2 sm:p-4">
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/65 backdrop-blur-sm" onClick={onClose} />
 
-      {/* Modal */}
-      <div className="relative z-10 w-full max-w-lg max-h-[92dvh] overflow-y-auto rounded-2xl border border-border bg-card shadow-2xl animate-float-up">
+      <div className="relative z-10 w-full max-w-lg max-h-[92dvh] overflow-y-auto
+        rounded-2xl border border-border bg-card shadow-2xl animate-float-up">
+
         {/* Header */}
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-card/95 px-3.5 py-2.5 sm:px-4 sm:py-3 backdrop-blur-md">
-          <div className="flex items-center gap-2 min-w-0">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex items-center gap-1 rounded-lg border border-border bg-secondary/50 px-2 py-1 text-xs font-bold text-foreground hover:bg-secondary active:scale-95 transition-all mr-0.5"
-              aria-label="Go back"
-            >
-              <ArrowLeft className="h-3.5 w-3.5" />
-              <span>Back</span>
-            </button>
-            <div className={cn('flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-xl', meta.bg)}>
-              <Icon className={cn('h-4 w-4 sm:h-4.5 sm:w-4.5', meta.text)} />
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span className={cn('rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider', meta.bg, meta.text)}>
-                  {meta.label}
-                </span>
-                <span className={cn('rounded px-1.5 py-0.5 text-[9px] font-bold uppercase', prio.bg, prio.text)}>
-                  {prio.label}
-                </span>
-                {request.isUserCreated && (
-                  <span className="rounded bg-alert/20 border border-alert/30 px-1.5 py-0.5 text-[9px] font-extrabold text-alert uppercase">
-                    ⚡ Live SOS
-                  </span>
-                )}
-              </div>
-              <h2 className="text-sm font-bold truncate mt-0.5">{request.title}</h2>
-            </div>
-          </div>
+        <div className="sticky top-0 z-10 flex items-center gap-2.5 border-b border-border
+          bg-card/95 px-4 py-3 backdrop-blur-md">
           <button
+            type="button"
             onClick={onClose}
-            className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+            className="flex items-center gap-1 rounded-lg border border-border bg-secondary/50
+              px-2.5 py-1.5 text-xs font-bold hover:bg-secondary active:scale-95 transition-all"
+            aria-label="Go back"
           >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Back
+          </button>
+          <div className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-xl', meta.bg)}>
+            <Icon className={cn('h-4 w-4', meta.text)} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className={cn('rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide', meta.bg, meta.text)}>
+                {meta.label}
+              </span>
+              <span className={cn('rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase', prio.bg, prio.text)}>
+                {prio.label}
+              </span>
+              {request.isUserCreated && (
+                <span className="rounded-md bg-alert/15 border border-alert/30 px-1.5 py-0.5 text-[9px] font-extrabold text-alert uppercase">
+                  ⚡ Live SOS
+                </span>
+              )}
+            </div>
+            <h2 className="text-sm font-bold truncate mt-0.5">{request.title}</h2>
+          </div>
+          <button onClick={onClose}
+            className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary transition-colors">
             <X className="h-4 w-4" />
           </button>
         </div>
 
         <div className="p-4 sm:p-5 space-y-4">
-          {/* Situation Details */}
+
+          {/* Situation details */}
           <div className="rounded-xl border border-border bg-secondary/20 p-3.5">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
-              Emergency Situation Details
+            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5">
+              Emergency Situation
             </p>
             <p className="text-xs sm:text-sm leading-relaxed text-foreground break-words">{request.details}</p>
-            <div className="mt-2.5 flex flex-wrap items-center gap-3 text-xs text-muted-foreground border-t border-border/50 pt-2">
+            <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-muted-foreground border-t border-border/50 pt-2.5">
               <span className="flex items-center gap-1">
                 <Clock className="h-3.5 w-3.5 text-info" /> {timeAgo(request.createdAt)}
               </span>
               <span className="flex items-center gap-1">
-                <MapPin className="h-3.5 w-3.5 text-info" /> {request.distanceMiles} miles away
+                <MapPin className="h-3.5 w-3.5 text-info" /> {request.distanceMiles} mi away
               </span>
               {request.peopleCount > 0 && (
                 <span className="flex items-center gap-1">
-                  <Users className="h-3.5 w-3.5 text-info" /> {request.peopleCount} people affected
+                  <Users className="h-3.5 w-3.5 text-info" /> {request.peopleCount} people
                 </span>
               )}
             </div>
           </div>
 
-          {/* Requester Contact Info Card */}
-          <div className="rounded-xl border-2 border-success/40 bg-success/[0.06] p-4 space-y-3">
+          {/* Contact card */}
+          <div className="rounded-xl border-2 border-success/35 bg-success/[0.05] p-4 space-y-3">
             <div className="flex items-center justify-between flex-wrap gap-2">
-              <div className="flex items-center gap-2">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-success/20 text-success">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-success/20 text-success">
                   <Phone className="h-4 w-4" />
                 </div>
                 <div>
@@ -824,22 +809,23 @@ function HelpOfferModal({
                   <p className="text-sm font-bold text-foreground">{request.contactName || 'Emergency Requester'}</p>
                 </div>
               </div>
-              <span className="text-xs font-mono font-bold text-success bg-success/15 px-2.5 py-1 rounded-md border border-success/30">
+              <span className="text-xs font-mono font-bold text-success bg-success/15 px-2.5 py-1 rounded-lg border border-success/25">
                 {request.contactPhone || 'No number provided'}
               </span>
             </div>
-
-            <div className="grid grid-cols-2 gap-2 pt-1">
+            <div className="grid grid-cols-2 gap-2">
               <a
                 href={request.contactPhone ? `tel:${request.contactPhone.replace(/[\s\-().]/g, '')}` : '#'}
-                className="flex items-center justify-center gap-2 rounded-xl bg-success px-3 py-2.5 text-xs font-bold text-white shadow-md shadow-success/20 hover:bg-success/90 active:scale-95 transition-all text-center"
+                className="flex items-center justify-center gap-2 rounded-xl bg-success px-3 py-2.5
+                  text-xs font-bold text-white shadow-md shadow-success/20 hover:bg-success/90 active:scale-95 transition-all"
               >
                 <Phone className="h-3.5 w-3.5" /> Call Now
               </a>
               <button
                 type="button"
                 onClick={handleCopyPhone}
-                className="flex items-center justify-center gap-1.5 rounded-xl border border-border bg-secondary/60 px-3 py-2.5 text-xs font-bold text-foreground hover:bg-secondary active:scale-95 transition-all"
+                className="flex items-center justify-center gap-1.5 rounded-xl border border-border
+                  bg-secondary/60 px-3 py-2.5 text-xs font-bold hover:bg-secondary active:scale-95 transition-all"
               >
                 {copied ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />}
                 {copied ? 'Copied!' : 'Copy Number'}
@@ -847,15 +833,15 @@ function HelpOfferModal({
             </div>
           </div>
 
-          {/* Location & Map Navigation Card */}
-          <div className="rounded-xl border border-info/30 bg-info/[0.05] p-4 space-y-3">
+          {/* Location & nav card */}
+          <div className="rounded-xl border border-info/25 bg-info/[0.04] p-4 space-y-3">
             <div className="flex items-start justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-info/20 text-info">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-info/20 text-info">
                   <Navigation className="h-4 w-4" />
                 </div>
                 <div>
-                  <p className="text-[10px] font-extrabold uppercase tracking-wider text-info">Victim Location & Route</p>
+                  <p className="text-[10px] font-extrabold uppercase tracking-wider text-info">Location & Route</p>
                   <p className="text-xs font-bold text-foreground">{locationLabel}</p>
                 </div>
               </div>
@@ -863,51 +849,46 @@ function HelpOfferModal({
                 {coords[0].toFixed(4)}, {coords[1].toFixed(4)}
               </span>
             </div>
-
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <button
                 type="button"
                 onClick={handleStartNavigation}
-                className="flex items-center justify-center gap-1.5 rounded-xl bg-info px-3 py-2.5 text-xs font-bold text-white shadow-md shadow-info/20 hover:bg-info/90 active:scale-95 transition-all"
+                className="flex items-center justify-center gap-1.5 rounded-xl bg-info px-3 py-2.5
+                  text-xs font-bold text-white shadow-md shadow-info/20 hover:bg-info/90 active:scale-95 transition-all"
               >
-                <MapPin className="h-3.5 w-3.5" /> View on Map & Navigate
+                <MapPin className="h-3.5 w-3.5" /> Navigate on Map
               </button>
               {googleMapsUrl && (
-                <a
-                  href={googleMapsUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-1.5 rounded-xl border border-border bg-secondary/60 px-3 py-2.5 text-xs font-bold text-foreground hover:bg-secondary active:scale-95 transition-all text-center"
-                >
+                <a href={googleMapsUrl} target="_blank" rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-1.5 rounded-xl border border-border
+                    bg-secondary/60 px-3 py-2.5 text-xs font-bold hover:bg-secondary active:scale-95 transition-all text-center">
                   <ExternalLink className="h-3.5 w-3.5" /> Google Maps ↗
                 </a>
               )}
             </div>
           </div>
 
-          {/* Items Needed Checklist */}
+          {/* Items checklist */}
           {request.items.length > 0 && (
-            <div className="rounded-xl border border-border bg-card p-3.5 space-y-2">
+            <div className="rounded-xl border border-border bg-card p-3.5 space-y-2.5">
               <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                Items / Supplies Needed (Select what you can provide)
+                Items Needed — Select what you can provide
               </p>
               <div className="space-y-1.5">
                 {request.items.map((item, idx) => (
                   <label
                     key={idx}
                     className={cn(
-                      'flex items-center gap-2 rounded-lg border p-2 text-xs font-medium cursor-pointer transition-colors',
+                      'flex items-center gap-2.5 rounded-lg border p-2.5 text-xs font-medium cursor-pointer transition-colors',
                       selectedItems[item]
                         ? 'border-success/40 bg-success/10 text-foreground'
-                        : 'border-border bg-secondary/20 text-muted-foreground hover:bg-secondary/40'
+                        : 'border-border bg-secondary/20 text-muted-foreground hover:bg-secondary/40',
                     )}
                   >
                     <input
                       type="checkbox"
                       checked={!!selectedItems[item]}
-                      onChange={(e) =>
-                        setSelectedItems((prev) => ({ ...prev, [item]: e.target.checked }))
-                      }
+                      onChange={(e) => setSelectedItems((prev) => ({ ...prev, [item]: e.target.checked }))}
                       className="rounded border-border text-success focus:ring-success h-3.5 w-3.5"
                     />
                     <span className="flex-1">{item}</span>
@@ -920,38 +901,46 @@ function HelpOfferModal({
             </div>
           )}
 
-          {/* Confirmation Action Button */}
-          <div className="space-y-2 pt-2">
+          {/* Actions */}
+          <div className="space-y-2.5 pt-1">
             <button
               type="button"
               onClick={handleConfirmHelpAndResolve}
               disabled={committed}
-              className="w-full flex items-center justify-center gap-2 rounded-xl bg-success hover:bg-success/90 px-4 py-3.5 text-sm font-bold text-white shadow-lg shadow-success/25 transition-all active:scale-[0.99]"
+              className={cn(
+                'w-full flex items-center justify-center gap-2 rounded-xl px-4 py-3.5',
+                'text-sm font-bold text-white shadow-lg transition-all active:scale-[0.99]',
+                committed
+                  ? 'bg-success/70 cursor-not-allowed'
+                  : 'bg-success shadow-success/25 hover:bg-success/90',
+              )}
             >
               <Users className="h-4 w-4" />
-              <span>{committed ? 'Help Confirmed & Resolved!' : '🤝 Confirm Help & Resolve Request'}</span>
+              {committed ? '✓ Help Confirmed & Resolved!' : '🤝 Confirm Help & Resolve Request'}
             </button>
 
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
                 onClick={handleStartNavigation}
-                className="flex items-center justify-center gap-1.5 rounded-xl border border-info/30 bg-info/10 hover:bg-info/20 text-info px-3 py-2.5 text-xs font-bold active:scale-95 transition-all text-center"
+                className="flex items-center justify-center gap-1.5 rounded-xl border border-info/30
+                  bg-info/10 hover:bg-info/20 text-info px-3 py-2.5 text-xs font-bold active:scale-95 transition-all"
               >
-                <MapPin className="h-3.5 w-3.5" /> Navigate on Map
+                <MapPin className="h-3.5 w-3.5" /> Navigate
               </button>
-
               <button
                 type="button"
                 onClick={onClose}
-                className="flex items-center justify-center gap-1.5 rounded-xl border border-border bg-secondary/60 hover:bg-secondary px-3 py-2.5 text-xs font-bold text-muted-foreground active:scale-95 transition-all text-center"
+                className="flex items-center justify-center gap-1.5 rounded-xl border border-border
+                  bg-secondary/60 hover:bg-secondary px-3 py-2.5 text-xs font-bold
+                  text-muted-foreground active:scale-95 transition-all"
               >
                 Close
               </button>
             </div>
 
-            <p className="mt-2 text-center text-[10px] text-muted-foreground">
-              Always ensure personal safety first. Dial <strong>112</strong> for life-threatening emergencies.
+            <p className="text-center text-[10px] text-muted-foreground/60 pt-1">
+              Ensure personal safety first · Dial <strong>112</strong> for life-threatening emergencies
             </p>
           </div>
         </div>
@@ -984,10 +973,18 @@ function RequestCard({
   onNavigate,
   region = 'ncr',
 }: RequestCardProps) {
-  const meta = CATEGORY_META[request.category];
-  const Icon = ICON_MAP[request.category] || HeartPulse;
-  const prio = PRIORITY_META[request.priority];
+  const meta   = CATEGORY_META[request.category];
+  const Icon   = ICON_MAP[request.category] || HeartPulse;
+  const prio   = PRIORITY_META[request.priority];
   const coords = computeRequestCoords(request, region);
+  const isHelping = request.status === 'in-progress';
+
+  /* Priority accent border class */
+  const accentClass = request.priority === 'critical'
+    ? 'border-l-alert/60'
+    : request.priority === 'urgent'
+    ? 'border-l-warning/50'
+    : 'border-l-info/40';
 
   const handleDirections = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -1009,87 +1006,106 @@ function RequestCard({
     onHelp(request);
   };
 
-  const isHelping = request.status === 'in-progress';
-
   return (
     <div
       onClick={onSelect}
       className={cn(
-        'group cursor-pointer rounded-xl border bg-card p-3 transition-all animate-slide-in-right',
+        'group cursor-pointer rounded-xl border-l-[3px] border border-border bg-card',
+        'p-3.5 transition-all duration-150 animate-slide-in-right',
+        accentClass,
         selected
-          ? 'border-alert/50 ring-1 ring-alert/30'
-          : 'border-border hover:border-border/80 hover:bg-card/80',
-        request.isUserCreated && 'ring-1 ring-alert/40 border-alert/40 bg-alert/[0.02]',
-        isHelping && 'border-success/40 bg-success/[0.03] ring-1 ring-success/30'
+          ? 'border-alert/40 bg-secondary/40 shadow-sm ring-1 ring-alert/20'
+          : 'hover:bg-secondary/30 hover:border-border',
+        request.isUserCreated && 'ring-1 ring-alert/30 border-alert/30 bg-alert/[0.02]',
+        isHelping && 'border-success/30 bg-success/[0.02] ring-1 ring-success/20',
       )}
-      style={{ animationDelay: `${index * 40}ms` }}
+      style={{ animationDelay: `${index * 35}ms` }}
     >
-      {/* Header row */}
+      {/* Top row — category + priority + time */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
-          <div className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-lg', meta.bg)}>
-            <Icon className={cn('h-4 w-4', meta.text)} />
+          <div className={cn('flex h-7 w-7 shrink-0 items-center justify-center rounded-lg', meta.bg)}>
+            <Icon className={cn('h-3.5 w-3.5', meta.text)} />
           </div>
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-1 sm:gap-1.5">
-              <span className={cn('rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide', meta.bg, meta.text)}>
-                {meta.label}
+          <div className="flex flex-wrap items-center gap-1">
+            <span className={cn('rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide', meta.bg, meta.text)}>
+              {meta.label}
+            </span>
+            <span className={cn(
+              'rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase',
+              request.priority === 'critical'
+                ? 'bg-alert/15 text-alert border border-alert/30'
+                : request.priority === 'urgent'
+                ? 'bg-warning/15 text-warning border border-warning/30'
+                : 'bg-info/[12%] text-info border border-info/25',
+            )}>
+              {prio.label}
+            </span>
+            {request.isUserCreated && (
+              <span className="flex items-center gap-0.5 rounded-md bg-alert/[12%] border border-alert/25 px-1.5 py-0.5 text-[9px] font-extrabold text-alert uppercase">
+                <Zap className="h-2.5 w-2.5" /> Live SOS
               </span>
-              <span className={cn('rounded px-1.5 py-0.5 text-[9px] font-bold uppercase', prio.bg, prio.text)}>
-                {prio.label}
+            )}
+            {isHelping && (
+              <span className="flex items-center gap-0.5 rounded-md bg-success/[12%] border border-success/25 px-1.5 py-0.5 text-[9px] font-extrabold text-success uppercase">
+                <Users className="h-2.5 w-2.5" /> Helping
               </span>
-              {request.isUserCreated && (
-                <span className="rounded bg-alert/20 border border-alert/30 px-1.5 py-0.5 text-[9px] font-extrabold text-alert uppercase">
-                  ⚡ Live SOS
-                </span>
-              )}
-              {isHelping && (
-                <span className="rounded bg-success/20 border border-success/30 px-1.5 py-0.5 text-[9px] font-extrabold text-success uppercase flex items-center gap-1">
-                  <Users className="h-2.5 w-2.5" /> Helping Active
-                </span>
-              )}
-            </div>
+            )}
           </div>
         </div>
-        <span className="flex shrink-0 items-center gap-0.5 text-[10px] sm:text-[11px] text-muted-foreground">
-          <Clock className="h-3 w-3" /> {timeAgo(request.createdAt)}
+        <span className="flex shrink-0 items-center gap-0.5 text-[10px] text-muted-foreground whitespace-nowrap">
+          <Clock className="h-2.5 w-2.5" /> {timeAgo(request.createdAt)}
         </span>
       </div>
 
-      <h3 className="mt-2 text-sm font-bold leading-snug break-words">{request.title}</h3>
-      <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground break-words">{request.details}</p>
+      {/* Title + details */}
+      <h3 className="mt-2 text-sm font-bold leading-snug break-words text-foreground">{request.title}</h3>
+      <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground leading-relaxed break-words">{request.details}</p>
 
-      {/* Contact preview badge */}
+      {/* Contact row */}
       {request.contactPhone && (
-        <div className="mt-2 flex items-center justify-between gap-2 rounded-lg bg-secondary/30 border border-border/70 px-2.5 py-1.5 text-xs">
+        <div className="mt-2.5 flex items-center justify-between gap-2 rounded-lg
+          bg-secondary/30 border border-border/60 px-2.5 py-1.5">
           <div className="flex items-center gap-1.5 min-w-0 truncate">
-            <span className="font-semibold text-foreground truncate">{request.contactName}:</span>
-            <span className="font-mono text-muted-foreground truncate">{request.contactPhone}</span>
+            <span className="text-xs font-semibold text-foreground truncate">{request.contactName}</span>
+            <span className="text-[10px] font-mono text-muted-foreground truncate hidden sm:block">
+              {request.contactPhone}
+            </span>
           </div>
           <a
             href={`tel:${request.contactPhone.replace(/[\s\-().]/g, '')}`}
             onClick={(e) => e.stopPropagation()}
-            className="flex items-center gap-1 rounded bg-success/15 px-2 py-0.5 text-[10px] font-bold text-success hover:bg-success/25 transition-colors shrink-0"
+            className="flex shrink-0 items-center gap-1 rounded-lg bg-success/15 border border-success/25
+              px-2.5 py-1 text-[10px] font-bold text-success hover:bg-success/25 transition-colors"
           >
             <Phone className="h-2.5 w-2.5" /> Call
           </a>
         </div>
       )}
 
+      {/* Items chips */}
       {request.items.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1">
-          {request.items.map((item, i) => (
-            <span key={i} className="rounded-md border border-border bg-secondary/40 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+          {request.items.slice(0, 4).map((item, i) => (
+            <span key={i} className="rounded-md border border-border bg-secondary/40
+              px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
               {item}
             </span>
           ))}
+          {request.items.length > 4 && (
+            <span className="rounded-md border border-border bg-secondary/40
+              px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+              +{request.items.length - 4} more
+            </span>
+          )}
         </div>
       )}
 
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-2.5">
-        <div className="flex items-center gap-2.5 sm:gap-3 text-[11px] text-muted-foreground">
+      {/* Footer row — distance + actions */}
+      <div className="mt-3 flex items-center justify-between gap-2 border-t border-border/50 pt-2.5">
+        <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
           <span className="flex items-center gap-0.5">
-            <MapPin className="h-3 w-3 text-info" /> {request.distanceMiles}mi
+            <MapPin className="h-3 w-3 text-info" /> {request.distanceMiles} mi
           </span>
           {request.peopleCount > 0 && (
             <span className="flex items-center gap-0.5">
@@ -1097,25 +1113,31 @@ function RequestCard({
             </span>
           )}
         </div>
+
         <div className="flex items-center gap-1.5">
           <button
             type="button"
             onClick={handleHelpClick}
             className={cn(
-              'flex items-center gap-1 rounded-lg px-2.5 sm:px-3 py-1.5 text-[10px] sm:text-[11px] font-bold text-white shadow-sm transition-all hover:opacity-95 active:scale-95',
+              'flex items-center gap-1 rounded-lg px-3 py-1.5 text-[11px] font-bold text-white',
+              'shadow-sm transition-all active:scale-95',
               isHelping
-                ? 'bg-emerald-600 shadow-emerald-600/20 ring-1 ring-emerald-400/40'
-                : 'bg-success shadow-success/20 hover:bg-success/90'
+                ? 'bg-emerald-600 shadow-emerald-600/20 ring-1 ring-emerald-400/30'
+                : 'bg-success shadow-success/20 hover:bg-success/90',
             )}
           >
-            <Users className="h-3 w-3" /> {isHelping ? '🤝 Helping Active' : 'I Can Help'}
+            <Users className="h-3 w-3" />
+            {isHelping ? 'Helping' : 'I Can Help'}
           </button>
           <button
             type="button"
             onClick={handleDirections}
-            className="flex items-center gap-1 rounded-lg border border-border bg-secondary/40 px-2 sm:px-2.5 py-1.5 text-[10px] sm:text-[11px] font-bold transition-all hover:bg-secondary active:scale-95"
+            className="flex items-center gap-1 rounded-lg border border-border
+              bg-secondary/40 px-2.5 py-1.5 text-[11px] font-bold
+              hover:bg-secondary transition-all active:scale-95"
           >
-            <Navigation className="h-3 w-3 text-info" /> Directions
+            <Navigation className="h-3 w-3 text-info" />
+            <span className="hidden sm:inline">Directions</span>
           </button>
         </div>
       </div>

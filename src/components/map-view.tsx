@@ -1194,6 +1194,56 @@ export function MapView({ requests, isOnline, selectedId, onSelect, region, them
           className={cn('map-ctrl-btn', legendOpen && 'border-info bg-info/15')} aria-label="Legend">
           <Layers className={cn('h-4 w-4', legendOpen ? 'text-info' : 'text-muted-foreground')} />
         </button>
+
+        {/* ── Compass ── */}
+        <div className="my-0.5 h-px bg-border/50" />
+        <div
+          title="North is up"
+          aria-label="Compass — north is up"
+          className="map-ctrl-btn cursor-default select-none"
+          style={{ width: 36, height: 36, padding: 0 }}
+        >
+          <svg
+            viewBox="0 0 36 36"
+            width="36"
+            height="36"
+            xmlns="http://www.w3.org/2000/svg"
+            aria-hidden="true"
+          >
+            {/* Outer ring */}
+            <circle cx="18" cy="18" r="16" fill="none" stroke="rgba(59,130,246,0.22)" strokeWidth="1" />
+            {/* Tick marks at cardinal points */}
+            <line x1="18" y1="3"  x2="18" y2="6"  stroke="#4a6a82" strokeWidth="1.2" />
+            <line x1="18" y1="30" x2="18" y2="33" stroke="#4a6a82" strokeWidth="1.2" />
+            <line x1="3"  y1="18" x2="6"  y2="18" stroke="#4a6a82" strokeWidth="1.2" />
+            <line x1="30" y1="18" x2="33" y2="18" stroke="#4a6a82" strokeWidth="1.2" />
+            {/* North needle — red */}
+            <polygon
+              points="18,5 15.5,18 18,16 20.5,18"
+              fill="#ef4444"
+            />
+            {/* South needle — muted */}
+            <polygon
+              points="18,31 15.5,18 18,20 20.5,18"
+              fill="#334155"
+            />
+            {/* Centre dot */}
+            <circle cx="18" cy="18" r="2.2" fill="#94a3b8" />
+            <circle cx="18" cy="18" r="1"   fill="#e2e8f0" />
+            {/* N label */}
+            <text
+              x="18"
+              y="13"
+              textAnchor="middle"
+              dominantBaseline="middle"
+              fontSize="5.5"
+              fontWeight="800"
+              fontFamily="Inter,system-ui,sans-serif"
+              fill="#ef4444"
+              letterSpacing="0.04em"
+            >N</text>
+          </svg>
+        </div>
       </div>
 
       {/* ── SEARCH PANEL ── */}
