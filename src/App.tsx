@@ -8,6 +8,8 @@ import { SosDrawer } from '@/components/sos-drawer';
 import { ShelterWidget } from '@/components/shelter-widget';
 import { FindHelpPanel } from '@/components/find-help-panel';
 import { OfferHelpPanel } from '@/components/offer-help-panel';
+import { VolunteerRegistrationModal } from '@/components/volunteer-registration-modal';
+import { hasVolunteerProfile } from '@/lib/volunteer-profile';
 import { MobileNav } from '@/components/mobile-nav';
 import type { MobileTab } from '@/components/mobile-nav';
 import { useNetwork, useOfflineQueue } from '@/hooks/use-network';
@@ -38,6 +40,7 @@ function App() {
   const [shelterOpen, setShelterOpen]     = useState(false);
   const [findHelpOpen, setFindHelpOpen]   = useState(false);
   const [offerHelpOpen, setOfferHelpOpen] = useState(false);
+  const [volunteerRegOpen, setVolunteerRegOpen] = useState(false);
   const [triageOpen, setTriageOpen]       = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [mobileTab, setMobileTab]   = useState<MobileTab>('map');
@@ -190,7 +193,11 @@ function App() {
         onSos={() => setSosOpen(true)}
         onShelter={() => setShelterOpen(true)}
         onFindHelp={() => setFindHelpOpen(true)}
-        onOfferHelp={() => setOfferHelpOpen(true)}
+        onOfferHelp={() => {
+          // Returning volunteers skip registration and go straight to posting resources.
+          if (hasVolunteerProfile()) setOfferHelpOpen(true);
+          else setVolunteerRegOpen(true);
+        }}
         theme={theme}
         onToggleTheme={toggleTheme}
         onTriage={() => setTriageOpen(true)}
@@ -424,6 +431,17 @@ function App() {
         resources={resources}
         locationLabel={locationLabel}
         onNavigate={handleNavigate}
+      />
+      <VolunteerRegistrationModal
+        open={volunteerRegOpen}
+        onOpenChange={setVolunteerRegOpen}
+        onComplete={() => {
+          // Registration finished — preserve the existing resource-posting flow.
+          toast.success('Volunteer registered', {
+            description: 'You can now post the resources you can share nearby.',
+          });
+          setOfferHelpOpen(true);
+        }}
       />
       <OfferHelpPanel
         open={offerHelpOpen}

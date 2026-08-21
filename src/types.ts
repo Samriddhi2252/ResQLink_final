@@ -76,6 +76,33 @@ export interface Resource {
 
 export type VolunteerOfferCategory = 'medical' | 'food' | 'water' | 'shelter' | 'transport' | 'rescue' | 'other';
 
+export type VolunteerGender = 'male' | 'female' | 'other' | 'prefer_not_to_say';
+
+export type VolunteerStatus = 'registered' | 'available' | 'on-duty' | 'unavailable';
+
+export interface VolunteerRegistration {
+  id: string;
+  fullName: string;
+  gender: VolunteerGender;
+  phone: string;
+  email: string;
+  latitude: number | null;
+  longitude: number | null;
+  locationPermission: boolean;
+  status: VolunteerStatus;
+  createdAt: number;
+}
+
+export interface VolunteerRegistrationInput {
+  fullName: string;
+  gender: VolunteerGender;
+  phone: string;
+  email: string;
+  latitude: number | null;
+  longitude: number | null;
+  locationPermission: boolean;
+}
+
 export interface VolunteerOffer {
   id: string;
   category: VolunteerOfferCategory;

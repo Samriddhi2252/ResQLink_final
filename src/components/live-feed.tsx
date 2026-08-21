@@ -26,6 +26,8 @@ import type { QueuedRequest } from '@/hooks/use-network';
 import { timeAgo } from '@/hooks/use-network';
 import type { NavDestination } from '@/hooks/use-navigation';
 import { useModalBack } from '@/hooks/use-modal-back';
+import { VolunteerRegistrationModal } from '@/components/volunteer-registration-modal';
+import { hasVolunteerProfile } from '@/lib/volunteer-profile';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Priority configuration (AI triage)
@@ -690,6 +692,7 @@ function HelpOfferModal({
     return init;
   });
   const [committed, setCommitted] = useState(request.status === 'in-progress');
+  const [volunteerModalOpen, setVolunteerModalOpen] = useState(false);
 
   const meta   = CATEGORY_META[request.category];
   const Icon   = ICON_MAP[request.category] || HeartPulse;
@@ -720,13 +723,26 @@ function HelpOfferModal({
     onClose();
   };
 
-  const handleConfirmHelpAndResolve = () => {
+  // ── Final confirmation — only runs AFTER volunteer registration succeeds,
+  //    or immediately if the volunteer has already registered before.
+  const finalizeConfirmation = () => {
     setCommitted(true);
     if (onResolve) onResolve(request.id);
     toast.success('🤝 Help Confirmed & Request Resolved!', {
       description: `Emergency request for ${request.contactName} (${request.contactPhone}) marked as resolved. Starting route...`,
     });
     setTimeout(() => { handleStartNavigation(); }, 600);
+  };
+
+  // "Confirm Help" no longer finalises immediately. A registered volunteer is
+  // required first; returning volunteers are recognised and skip the popup.
+  const handleConfirmHelp = () => {
+    if (committed) return;
+    if (hasVolunteerProfile()) {
+      finalizeConfirmation();
+    } else {
+      setVolunteerModalOpen(true);
+    }
   };
 
   return (
@@ -905,7 +921,7 @@ function HelpOfferModal({
           <div className="space-y-2.5 pt-1">
             <button
               type="button"
-              onClick={handleConfirmHelpAndResolve}
+              onClick={handleConfirmHelp}
               disabled={committed}
               className={cn(
                 'w-full flex items-center justify-center gap-2 rounded-xl px-4 py-3.5',
@@ -945,6 +961,15 @@ function HelpOfferModal({
           </div>
         </div>
       </div>
+
+      {/* Volunteer registration popup — opened by "Confirm Help" and gated so
+          the request is only confirmed after successful registration. Closing
+          it without registering keeps this popup safe for retry. */}
+      <VolunteerRegistrationModal
+        open={volunteerModalOpen}
+        onOpenChange={setVolunteerModalOpen}
+        onComplete={finalizeConfirmation}
+      />
     </div>
   );
 }
