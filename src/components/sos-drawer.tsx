@@ -125,7 +125,7 @@ export function SosDrawer({ open, onOpenChange, isOnline, onEnqueue, region, loc
       category: category || 'rescue',
       details,
       items,
-      contact: contact.trim() || '+91 98110 00112',
+      contact:   contact.trim(),
       coords: coords.trim() || fallbackCoords,
       createdAt: Date.now(),
       region:    region        || 'ncr',

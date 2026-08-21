@@ -480,8 +480,8 @@ export function LiveFeed({
       const q = search.toLowerCase();
       return r.title.toLowerCase().includes(q)       ||
              r.details.toLowerCase().includes(q)     ||
-             r.contactName.toLowerCase().includes(q) ||
-             r.contactPhone.toLowerCase().includes(q)||
+             (r.contactName ? r.contactName.toLowerCase().includes(q) : false) ||
+             (r.contactPhone ? r.contactPhone.toLowerCase().includes(q) : false) ||
              r.items.some((i) => i.toLowerCase().includes(q));
     }
     return true;
@@ -729,7 +729,9 @@ function HelpOfferModal({
     setCommitted(true);
     if (onResolve) onResolve(request.id);
     toast.success('🤝 Help Confirmed & Request Resolved!', {
-      description: `Emergency request for ${request.contactName} (${request.contactPhone}) marked as resolved. Starting route...`,
+      description: request.contactPhone
+        ? `Emergency request for ${request.contactName} (${request.contactPhone}) marked as resolved. Starting route...`
+        : `Emergency request for ${request.contactName} marked as resolved. Starting route...`,
     });
     setTimeout(() => { handleStartNavigation(); }, 600);
   };
@@ -813,41 +815,62 @@ function HelpOfferModal({
             </div>
           </div>
 
-          {/* Contact card */}
-          <div className="rounded-xl border-2 border-success/35 bg-success/[0.05] p-4 space-y-3">
-            <div className="flex items-center justify-between flex-wrap gap-2">
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-success/20 text-success">
-                  <Phone className="h-4 w-4" />
+          {/* Contact card — only shown when requester provided a phone number */}
+          {request.contactPhone ? (
+            <div className="rounded-xl border-2 border-success/35 bg-success/[0.05] p-4 space-y-3">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-2.5">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-success/20 text-success">
+                    <Phone className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-extrabold uppercase tracking-wider text-success">Requester Contact</p>
+                    <p className="text-sm font-bold text-foreground">{request.contactName || 'Emergency Requester'}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-[10px] font-extrabold uppercase tracking-wider text-success">Requester Contact</p>
-                  <p className="text-sm font-bold text-foreground">{request.contactName || 'Emergency Requester'}</p>
+                <span className="text-xs font-mono font-bold text-success bg-success/15 px-2.5 py-1 rounded-lg border border-success/25">
+                  {request.contactPhone}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <a
+                  href={`tel:${request.contactPhone.replace(/[\s\-().]/g, '')}`}
+                  className="flex items-center justify-center gap-2 rounded-xl bg-success px-3 py-2.5
+                    text-xs font-bold text-white shadow-md shadow-success/20 hover:bg-success/90 active:scale-95 transition-all"
+                >
+                  <Phone className="h-3.5 w-3.5" /> Call Now
+                </a>
+                <button
+                  type="button"
+                  onClick={handleCopyPhone}
+                  className="flex items-center justify-center gap-1.5 rounded-xl border border-border
+                    bg-secondary/60 px-3 py-2.5 text-xs font-bold hover:bg-secondary active:scale-95 transition-all"
+                >
+                  {copied ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />}
+                  {copied ? 'Copied!' : 'Copy Number'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-border/70 bg-secondary/20 p-3.5 flex items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-secondary/80 text-muted-foreground">
+                  {request.triage ? <Brain className="h-4 w-4 text-warning" /> : <Phone className="h-4 w-4 text-muted-foreground" />}
+                </div>
+                <div className="min-w-0">
+                  <p className="font-semibold text-foreground truncate">
+                    {request.contactName || (request.triage ? 'AI Triage Request' : 'Emergency Requester')}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {request.triage ? 'Submitted via AI Triage (No phone number attached)' : 'No phone number provided'}
+                  </p>
                 </div>
               </div>
-              <span className="text-xs font-mono font-bold text-success bg-success/15 px-2.5 py-1 rounded-lg border border-success/25">
-                {request.contactPhone || 'No number provided'}
+              <span className="shrink-0 text-[10px] font-bold text-muted-foreground bg-secondary/80 px-2 py-1 rounded-md border border-border">
+                {request.triage ? 'AI TRIAGE' : 'NO PHONE'}
               </span>
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <a
-                href={request.contactPhone ? `tel:${request.contactPhone.replace(/[\s\-().]/g, '')}` : '#'}
-                className="flex items-center justify-center gap-2 rounded-xl bg-success px-3 py-2.5
-                  text-xs font-bold text-white shadow-md shadow-success/20 hover:bg-success/90 active:scale-95 transition-all"
-              >
-                <Phone className="h-3.5 w-3.5" /> Call Now
-              </a>
-              <button
-                type="button"
-                onClick={handleCopyPhone}
-                className="flex items-center justify-center gap-1.5 rounded-xl border border-border
-                  bg-secondary/60 px-3 py-2.5 text-xs font-bold hover:bg-secondary active:scale-95 transition-all"
-              >
-                {copied ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />}
-                {copied ? 'Copied!' : 'Copy Number'}
-              </button>
-            </div>
-          </div>
+          )}
 
           {/* Location & nav card */}
           <div className="rounded-xl border border-info/25 bg-info/[0.04] p-4 space-y-3">

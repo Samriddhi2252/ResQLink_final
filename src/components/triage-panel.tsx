@@ -162,7 +162,7 @@ export function TriagePanel({
                   ? 'medical' : 'rescue',
       details:  triageResult.rawMessage,
       items:    triageResult.requiredResources.join(', '),
-      contact:  '+91 98110 00112',
+      contact:  '',
       coords:   fallbackCoords,
       createdAt: Date.now(),
       region,

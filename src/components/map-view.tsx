@@ -784,8 +784,11 @@ export function MapView({ requests, isOnline, selectedId, onSelect, region, them
           ${r.items.length>0?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">
             ${r.items.map(i=>`<span style="background:#162840;border:1px solid #2a4a68;border-radius:5px;padding:2px 7px;font-size:10px;color:#93c5fd">${i}</span>`).join('')}</div>`:''}
           <div style="padding-top:8px;border-top:1px solid #1e3a52;display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:11px">
-            <span>📞 <a href="tel:${r.contactPhone ? r.contactPhone.replace(/[\s\-().]/g,'') : ''}" style="color:#38bdf8;font-weight:700;text-decoration:none" onclick="event.stopPropagation()">${r.contactPhone || 'No phone'}</a></span>
-            <span style="color:#94a3b8;font-size:10px">${r.contactName || 'Requester'}</span>
+            ${r.contactPhone
+              ? `<span>📞 <a href="tel:${r.contactPhone.replace(/[\s\-().]/g,'')}" style="color:#38bdf8;font-weight:700;text-decoration:none" onclick="event.stopPropagation()">${r.contactPhone}</a></span>`
+              : `<span style="color:#64748b;font-size:10px;font-style:italic">No phone attached</span>`
+            }
+            <span style="color:#94a3b8;font-size:10px">${r.contactName || (r.triage ? 'AI Triage' : 'Requester')}</span>
           </div>
         </div>`,
         { className:'map-popup', maxWidth:260 },

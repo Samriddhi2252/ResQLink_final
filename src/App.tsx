@@ -99,18 +99,20 @@ function App() {
     }
 
     // 3. Parse contact info:
-    let contactName = 'Emergency Requester';
-    let contactPhone = req.contact ? req.contact.trim() : '';
-    if (req.contact) {
+    let contactName = '';
+    let contactPhone = '';
+    if (req.contact && req.contact.trim()) {
       const phoneMatch = req.contact.match(/(\+?\d[\d\s\-]{8,})/);
       if (phoneMatch) {
         contactPhone = phoneMatch[0].trim();
         const namePart = req.contact.replace(phoneMatch[0], '').trim();
-        if (namePart) contactName = namePart;
+        contactName = namePart || 'Emergency Requester';
+      } else {
+        contactName = req.contact.trim();
       }
     }
-    if (!contactPhone) {
-      contactPhone = '+91 98110 00112';
+    if (!contactName) {
+      contactName = req.triage ? 'AI Triage Request' : 'Emergency Requester';
     }
 
     // 4. Create active AidRequest
